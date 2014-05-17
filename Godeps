@@ -1,0 +1,47 @@
+{
+	"ImportPath": "akamai/focus",
+	"GoVersion": "go1.3",
+	"Packages": [
+		"akamai/focus/..."
+	],
+	"Deps": [
+		{
+			"ImportPath": "github.com/codegangsta/inject",
+			"Comment": "v1.0-rc1",
+			"Rev": "37d7f8432a3e684eef9b2edece76bdfa6ac85b39"
+		},
+		{
+			"ImportPath": "github.com/go-martini/martini",
+			"Comment": "v1.0-rc1-28-g234dc6b",
+			"Rev": "234dc6b858add8eb6ca1f143545f2d643515f70b"
+		},
+		{
+			"ImportPath": "github.com/golang/glog",
+			"Rev": "d1c4472bf2efd3826f2b5bdcc02d8416798d678c"
+		},
+		{
+			"ImportPath": "github.com/gopherjs/go-angularjs",
+			"Rev": "27802b8039f2438d3f594abb61f6b52d7fb51265"
+		},
+		{
+			"ImportPath": "github.com/gopherjs/gopherjs/js",
+			"Rev": "6953bbe1affc8578a508c4ec0a7758659850d4b0"
+		},
+		{
+			"ImportPath": "github.com/gorilla/websocket",
+			"Rev": "10a95d14a3a215f5e2045d3dbbcd29f1ab209586"
+		},
+		{
+			"ImportPath": "github.com/martini-contrib/render",
+			"Rev": "c8d058a00a82f27bfc8a49d62525b7c60efcf5b8"
+		},
+		{
+			"ImportPath": "github.com/mattn/go-sqlite3",
+			"Rev": "58c62dc30cda06e4a74e18f6489bb6c112fc6e5d"
+		},
+		{
+			"ImportPath": "github.com/phaikawl/options",
+			"Rev": "33045dfd337da5785e4ec7e5b76d3c3fde591af8"
+		}
+	]
+}
