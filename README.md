@@ -1,15 +1,16 @@
 ## Overview
 
-focus is an experimental collaboration platform.
+`focus` is an experimental collaboration platform.
 
-Its first major component, "vaporpad", is a low-latency collaborative editor
-inspired and derived from [etherpad-lite](http://etherpad.org),
+Its first major component, `vaporpad`, is a low-latency collaborative editor
+inspired by and derived from [etherpad-lite](http://etherpad.org),
 [sharejs](http://sharejs.org), and [ot.v](https://github.com/Operational-
 Transformation/ot.v).
 
 ## Caveats
 
-Warning: `focus` is not yet feature-complete and has [known issues](https://github.com/mstone/focus/issues).
+Warning: `focus` is not yet feature-complete and has [known
+issues](https://github.com/mstone/focus/issues).
 
 ## Dependencies
 
@@ -30,6 +31,8 @@ focus:
       * [martini-contrib/binding](https://github.com/martini-contrib/binding),
       * [martini-contrib/render](https://github.com/martini-contrib/render),
       * [gorilla/websocket](https://github.com/gorilla/websocket)
+      * [codegangsta/inject](https://github.com/codegangsta/inject)
+      * [phaikawl/options](https://github.com/phaikawl/options)
 
   * run-depends on
 
@@ -41,6 +44,8 @@ focus:
 
 ## Use
 
-focus is intended to be mounted in your GOPATH, presently at `$GOPATH/src/akamai/focus`.
+The `focus` source repository is intended to be mounted in your GOPATH,
+presently at `$GOPATH/src/akamai/focus`.
 
-For ideas on how to run a `focus` instance, please see our example [run.sh](./run.sh) script.
+For ideas on how to run a `focus` instance, please see our example
+[run.sh](./run.sh) script.
