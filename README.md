@@ -1,6 +1,6 @@
 ## Overview
 
-`focus` is an experimental collaboration platform.
+focus is an experimental collaboration platform.
 
 Its first major component, `vaporpad`, is a low-latency collaborative editor
 inspired by and derived from [etherpad-lite](http://etherpad.org),
@@ -9,7 +9,7 @@ Transformation/ot.v).
 
 ## Caveats
 
-Warning: `focus` is not yet feature-complete and has [known
+Warning: focus is not yet feature-complete and has [known
 issues](https://github.com/mstone/focus/issues).
 
 ## Dependencies
@@ -44,8 +44,66 @@ focus:
 
 ## Use
 
-The `focus` source repository is intended to be mounted in your GOPATH,
-presently at `$GOPATH/src/akamai/focus`.
+Here are some hints to help get you started running a local dev instance of focus:
 
-For ideas on how to run a `focus` instance, please see our example
-[run.sh](./run.sh) script.
+```bash
+export GOPATH=$HOME/go
+mkdir -p $GOPATH/{pkg,src,bin}
+
+export PATH=$GOPATH/bin:$PATH
+
+go get -d github.com/gopherjs/gopherjs
+cd $GOPATH/src/github.com/gopherjs/gopherjs
+git reset --hard 8c1a7c4abffa10724775114ff769c98ff1daed3c
+go install
+
+go get -d github.com/mstone/focus
+cd $GOPATH/src/github.com/mstone/focus
+git submodule init
+git submodule update
+./run.sh
+```
+
+and here's a step-by-step explanation of these instructions:
+
+1. focus is written in go and go expects you to set a special environment
+variable, named `GOPATH`, to point to a special directory structure intended
+for storing source code, intermediate compilation results, and compiled
+binaries:
+
+    ```bash
+    export GOPATH=$HOME/go
+    mkdir -p $GOPATH/{pkg,src,bin}
+    ```
+
+2. focus build-depends on some other programs written in go, notably
+[gopherjs](https://github.com/gopherjs/gopherjs). Therefore, we add the
+`$GOPATH/bin` folder to our `PATH` environment variable:
+
+    ```bash
+    export PATH=$GOPATH/bin:$PATH
+    ```
+    
+3. gopherjs is still under active development so, for now, we recommend using
+some fairly specific known-good versions of gopherjs, such as this one:
+
+    ```bash
+    go get -d github.com/gopherjs/gopherjs
+    cd $GOPATH/src/github.com/gopherjs/gopherjs
+    git reset --hard 8c1a7c4abffa10724775114ff769c98ff1daed3c
+    go install
+    ```
+
+4. finally, focus uses some existing javascript libraries like
+[ACE](http://ace.c9.io), which we currently include via a [git
+submodule](http://git-scm.com/docs/git-submodule), which [go
+get](http://golang.org/cmd/go/#hdr-Download_and_install_packages_and_dependencies)
+does not automatically check out:
+
+    ```bash
+    go get -d github.com/mstone/focus
+    cd $GOPATH/src/github.com/mstone/focus
+    git submodule init
+    git submodule update
+    ./run.sh
+    ```
