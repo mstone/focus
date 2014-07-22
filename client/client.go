@@ -11,9 +11,9 @@ import (
 	ng "github.com/gopherjs/go-angularjs"
 	"github.com/gopherjs/gopherjs/js"
 
-	"akamai/focus/js/ace"
-	"akamai/focus/js/alert"
-	"akamai/focus/ot"
+	"github.com/mstone/focus/js/ace"
+	"github.com/mstone/focus/js/alert"
+	"github.com/mstone/focus/ot"
 )
 
 func main() {

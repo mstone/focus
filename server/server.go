@@ -15,9 +15,9 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/martini-contrib/render"
 
-	"akamai/focus/msg"
-	"akamai/focus/ot"
-	"akamai/focus/store"
+	"github.com/mstone/focus/msg"
+	"github.com/mstone/focus/ot"
+	"github.com/mstone/focus/store"
 )
 
 type Config struct {

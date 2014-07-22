@@ -13,8 +13,8 @@ import (
 	"github.com/golang/glog"
 	_ "github.com/mattn/go-sqlite3"
 
-	"akamai/focus/server"
-	"akamai/focus/store"
+	"github.com/mstone/focus/server"
+	"github.com/mstone/focus/store"
 )
 
 var driver = flag.String("driver", "sqlite3", "database/sql driver")

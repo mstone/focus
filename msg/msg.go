@@ -5,7 +5,7 @@
 package msg
 
 import (
-	"akamai/focus/ot"
+	"github.com/mstone/focus/ot"
 )
 
 type OTServerMsg struct {

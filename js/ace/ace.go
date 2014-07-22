@@ -35,9 +35,9 @@ import (
 
 	"github.com/gopherjs/gopherjs/js"
 
-	"akamai/focus/js/alert"
-	"akamai/focus/msg"
-	"akamai/focus/ot"
+	"github.com/mstone/focus/js/alert"
+	"github.com/mstone/focus/msg"
+	"github.com/mstone/focus/ot"
 )
 
 type Range struct {
