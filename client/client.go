@@ -3,7 +3,7 @@
 
 // Package client uses gopherjs, AngularJS, and the HTTP Focus interface to
 // implement a simple Focus client.
-package client
+package main
 
 import (
 	"fmt"
