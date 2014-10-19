@@ -3,7 +3,8 @@ package martini
 import (
 	"log"
 	"net/http"
-	"path"
+	"net/url"
+	"path/filepath"
 	"strings"
 )
 
@@ -18,6 +19,11 @@ type StaticOptions struct {
 	// Expires defines which user-defined function to use for producing a HTTP Expires Header
 	// https://developers.google.com/speed/docs/insights/LeverageBrowserCaching
 	Expires func() string
+	// Fallback defines a default URL to serve when the requested resource was
+	// not found.
+	Fallback string
+	// Exclude defines a pattern for URLs this handler should never process.
+	Exclude string
 }
 
 func prepareStaticOptions(options []StaticOptions) StaticOptions {
@@ -44,11 +50,17 @@ func prepareStaticOptions(options []StaticOptions) StaticOptions {
 
 // Static returns a middleware handler that serves static files in the given directory.
 func Static(directory string, staticOpt ...StaticOptions) Handler {
+	if !filepath.IsAbs(directory) {
+		directory = filepath.Join(Root, directory)
+	}
 	dir := http.Dir(directory)
 	opt := prepareStaticOptions(staticOpt)
 
 	return func(res http.ResponseWriter, req *http.Request, log *log.Logger) {
 		if req.Method != "GET" && req.Method != "HEAD" {
+			return
+		}
+		if opt.Exclude != "" && strings.HasPrefix(req.URL.Path, opt.Exclude) {
 			return
 		}
 		file := req.URL.Path
@@ -64,8 +76,16 @@ func Static(directory string, staticOpt ...StaticOptions) Handler {
 		}
 		f, err := dir.Open(file)
 		if err != nil {
-			// discard the error?
-			return
+			// try any fallback before giving up
+			if opt.Fallback != "" {
+				file = opt.Fallback // so that logging stays true
+				f, err = dir.Open(opt.Fallback)
+			}
+
+			if err != nil {
+				// discard the error?
+				return
+			}
 		}
 		defer f.Close()
 
@@ -78,11 +98,16 @@ func Static(directory string, staticOpt ...StaticOptions) Handler {
 		if fi.IsDir() {
 			// redirect if missing trailing slash
 			if !strings.HasSuffix(req.URL.Path, "/") {
-				http.Redirect(res, req, req.URL.Path+"/", http.StatusFound)
+				dest := url.URL{
+					Path:     req.URL.Path + "/",
+					RawQuery: req.URL.RawQuery,
+					Fragment: req.URL.Fragment,
+				}
+				http.Redirect(res, req, dest.String(), http.StatusFound)
 				return
 			}
 
-			file = path.Join(file, opt.IndexFile)
+			file = filepath.Join(file, opt.IndexFile)
 			f, err = dir.Open(file)
 			if err != nil {
 				return

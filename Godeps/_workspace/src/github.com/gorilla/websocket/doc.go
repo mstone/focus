@@ -102,4 +102,44 @@
 // methods (NextReader, SetReadDeadline, ReadMessage). The Close and
 // WriteControl methods can be called concurrently with all other methods.
 //
+// Read is Required
+//
+// The application must read the connection to process ping and close messages
+// sent from the peer. If the application is not otherwise interested in
+// messages from the peer, then the application should start a goroutine to read
+// and discard messages from the peer. A simple example is:
+//
+//  func readLoop(c *websocket.Conn) {
+//      for {
+//          if _, _, err := c.NextReader(); err != nil {
+//              c.Close()
+//              break
+//          }
+//      }
+//  }
+//
+// Origin Considerations
+//
+// Web browsers allow Javascript applications to open a WebSocket connection to
+// any host. It's up to the server to enforce an origin policy using the Origin
+// request header sent by the browser.
+//
+// The Upgrader calls the function specified in the CheckOrigin field to check
+// the origin. If the CheckOrigin function returns false, then the Upgrade
+// method fails the WebSocket handshake with HTTP status 403.
+//
+// If the CheckOrigin field is nil, then the Upgrader uses a safe default: fail
+// the handshake if the Origin request header is present and not equal to the
+// Host request header.
+//
+// An application can allow connections from any origin by specifying a
+// function that always returns true:
+//
+//    var upgrader = websocket.Upgrader{
+//      CheckOrigin: func(r *http.Request) bool { return true },
+//   }
+//
+// The deprecated Upgrade function does enforce an origin policy. It's the
+// application's responsibility to check the Origin header before calling
+// Upgrade.
 package websocket

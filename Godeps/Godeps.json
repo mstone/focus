@@ -4,13 +4,13 @@
 	"Deps": [
 		{
 			"ImportPath": "github.com/codegangsta/inject",
-			"Comment": "v1.0-rc1",
-			"Rev": "37d7f8432a3e684eef9b2edece76bdfa6ac85b39"
+			"Comment": "v1.0-rc1-4-g4b81725",
+			"Rev": "4b8172520a03fa190f427bbd284db01b459bfce7"
 		},
 		{
 			"ImportPath": "github.com/go-martini/martini",
-			"Comment": "v1.0-rc1-28-g234dc6b",
-			"Rev": "234dc6b858add8eb6ca1f143545f2d643515f70b"
+			"Comment": "v1.0-50-g7d32ea3",
+			"Rev": "7d32ea3fa6590565c928b90a48178b60b96df98f"
 		},
 		{
 			"ImportPath": "github.com/golang/glog",
@@ -18,15 +18,19 @@
 		},
 		{
 			"ImportPath": "github.com/gorilla/websocket",
-			"Rev": "10a95d14a3a215f5e2045d3dbbcd29f1ab209586"
+			"Rev": "87f6f6a22ebfbc3f89b9ccdc7fddd1b914c095f9"
 		},
 		{
 			"ImportPath": "github.com/martini-contrib/render",
-			"Rev": "c8d058a00a82f27bfc8a49d62525b7c60efcf5b8"
+			"Rev": "b65063311fac6cbf84d3538f5715f7847e648322"
 		},
 		{
 			"ImportPath": "github.com/mattn/go-sqlite3",
-			"Rev": "58c62dc30cda06e4a74e18f6489bb6c112fc6e5d"
+			"Rev": "ea3ab4d8f5eba6a26173197b7c612fb1c0d0a081"
+		},
+		{
+			"ImportPath": "github.com/oxtoacart/bpool",
+			"Rev": "0f78ff9152c03745d1a47c9023af1b424e202c07"
 		}
 	]
 }

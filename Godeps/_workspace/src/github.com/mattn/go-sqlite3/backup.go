@@ -1,3 +1,8 @@
+// Copyright (C) 2014 Yasuhiro Matsumoto <mattn.jp@gmail.com>.
+//
+// Use of this source code is governed by an MIT-style
+// license that can be found in the LICENSE file.
+
 package sqlite3
 
 /*
@@ -25,8 +30,18 @@ func (c *SQLiteConn) Backup(dest string, conn *SQLiteConn, src string) (*Backup,
 	return nil, c.lastError()
 }
 
-func (b *Backup) Step(p int) error {
-	return Error{Code: ErrNo(C.sqlite3_backup_step(b.b, C.int(p)))}
+// Backs up for one step. Calls the underlying `sqlite3_backup_step` function.
+// This function returns a boolean indicating if the backup is done and
+// an error signalling any other error. Done is returned if the underlying C
+// function returns SQLITE_DONE (Code 101)
+func (b *Backup) Step(p int) (bool, error) {
+	ret := C.sqlite3_backup_step(b.b, C.int(p))
+	if ret == C.SQLITE_DONE {
+		return true, nil
+	} else if ret != 0 {
+		return false, Error{Code: ErrNo(ret)}
+	}
+	return false, nil
 }
 
 func (b *Backup) Remaining() int {
@@ -38,5 +53,9 @@ func (b *Backup) PageCount() int {
 }
 
 func (b *Backup) Finish() error {
-	return Error{Code: ErrNo(C.sqlite3_backup_finish(b.b))}
+	ret := C.sqlite3_backup_finish(b.b)
+	if ret != 0 {
+		return Error{Code: ErrNo(ret)}
+	}
+	return nil
 }
