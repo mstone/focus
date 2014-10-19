@@ -54,7 +54,8 @@ export PATH=$GOPATH/bin:$PATH
 
 go get -d github.com/gopherjs/gopherjs
 cd $GOPATH/src/github.com/gopherjs/gopherjs
-git reset --hard 8c1a7c4abffa10724775114ff769c98ff1daed3c
+git remote update
+git reset --hard 61c1239f50c65aabdb00ad1a82cf493ea3272823
 go install
 
 go get -d github.com/mstone/focus
@@ -90,7 +91,8 @@ some fairly specific known-good versions of gopherjs, such as this one:
     ```bash
     go get -d github.com/gopherjs/gopherjs
     cd $GOPATH/src/github.com/gopherjs/gopherjs
-    git reset --hard 8c1a7c4abffa10724775114ff769c98ff1daed3c
+    git remote update
+    git reset --hard 61c1239f50c65aabdb00ad1a82cf493ea3272823
     go install
     ```
 
