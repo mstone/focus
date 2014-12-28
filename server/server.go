@@ -5,8 +5,6 @@
 package server
 
 import (
-	"crypto/rand"
-	"math/big"
 	"net/http"
 	"sync"
 
@@ -24,66 +22,140 @@ type Config struct {
 	Store *store.Store
 }
 
-type otconn struct {
-	site  int
-	conn  *websocket.Conn
-	cmsgs chan interface{}
+// struct conn represents an open WebSocket connection.
+type conn struct {
+	mu    sync.Mutex
+	msgs  chan interface{}
+	ws    *websocket.Conn
+	descs map[*desc]struct{}
+}
+
+// struct desc represents an open VPP pad description (like an fd)
+type desc struct {
+	conn *conn
+	doc  *doc
+}
+
+// struct doc represents a vaporpad (like a file)
+type doc struct {
+	mu    sync.Mutex
+	descs map[*desc]struct{}
+	hist  ot.Ops
 }
 
 type Server struct {
 	mu    sync.Mutex
 	store *store.Store
-
-	conns map[int]otconn
-	hist  ot.Ops
+	conns map[*conn]struct{}
+	descs map[*desc]struct{}
+	docs  map[*doc]struct{}
 }
 
 func New(c Config) *Server {
-	return &Server{
+	s := &Server{
 		mu:    sync.Mutex{},
 		store: c.Store,
-		conns: map[int]otconn{},
+		conns: map[*conn]struct{}{},
+		descs: map[*desc]struct{}{},
+		docs:  map[*doc]struct{}{},
+	}
+
+	doc := &doc{
+		mu:    sync.Mutex{},
+		descs: map[*desc]struct{}{},
 		hist:  ot.Ops{},
 	}
+
+	s.docs[doc] = struct{}{}
+
+	return s
 }
 
 func jsonError(x render.Render, status int, v interface{}) {
 	x.JSON(status, v)
 }
 
-func (s *Server) addConn(site int, conn *websocket.Conn) otconn {
+func (s *Server) addConn(c *conn) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.conns[site] = otconn{
-		site:  site,
-		conn:  conn,
-		cmsgs: make(chan interface{}, 5),
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	var doc *doc
+	for d2, _ := range s.docs {
+		doc = d2
 	}
-	return s.conns[site]
+
+	doc.mu.Lock()
+	defer doc.mu.Unlock()
+
+	d := &desc{
+		conn: c,
+		doc:  doc,
+	}
+
+	s.conns[c] = struct{}{}
+	c.descs[d] = struct{}{}
+	s.descs[d] = struct{}{}
+	doc.descs[d] = struct{}{}
 }
 
-func (s *Server) closeConn(site int) {
+func (s *Server) closeConn(c *conn) {
+	// XXX: this code is likely buggy: tightly coupled, badly locked, and buggy! :-/
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	conn := s.conns[site]
-	conn.conn.Close()
-	close(conn.cmsgs)
-	delete(s.conns, site)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.ws.Close()
+	close(c.msgs)
+
+	unlink := func(desc *desc) {
+		desc.doc.mu.Lock()
+		defer desc.doc.mu.Unlock()
+
+		delete(desc.doc.descs, desc)
+		delete(s.descs, desc)
+		delete(c.descs, desc)
+	}
+
+	for desc, _ := range c.descs {
+		unlink(desc)
+	}
+
+	delete(s.conns, c)
 }
 
-func (s *Server) transformOps(site int, rev int, ops ot.Ops) {
+func (s *Server) transformOps(c *conn, rev int, ops ot.Ops) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	glog.Infof("site: %d, transforming %d ops", site, len(ops))
+	glog.Infof("conn: %p, transforming %d ops", c, len(ops))
+
+	// extract last desc
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	var d *desc
+	for d2, _ := range c.descs {
+		d = d2
+	}
+
+	// extract doc
+	doc := d.doc
+
+	// process ops
+	doc.mu.Lock()
+	defer doc.mu.Unlock()
 
 	var concurrent ot.Ops
-	if rev < len(s.hist) {
-		concurrent = s.hist[rev:]
+	if rev < len(doc.hist) {
+		concurrent = doc.hist[rev:]
 	}
-	glog.Infof("site: %d, found %d concurrent ops", site, len(concurrent))
+	glog.Infof("conn: %p, desc: %p, doc: %p, found %d concurrent ops", c, d, doc, len(concurrent))
 
 	// go func() {
 	// 	time.Sleep(1 * time.Second)
@@ -93,34 +165,42 @@ func (s *Server) transformOps(site int, rev int, ops ot.Ops) {
 
 	glog.Infof("transform:\n\tops: %s -> ops2: %s\n\tcon: %s -> con2: %s", ops.String(), ops2.String(), concurrent.String(), concurrent2.String())
 
-	s.hist = append(s.hist, ops2...)
-	rev = len(s.hist)
+	doc.hist = append(doc.hist, ops2...)
+	rev = len(doc.hist)
 
-	glog.Infof("site: %d, enqueueing", site)
+	glog.Infof("conn: %p, enqueueing", c)
 
-	for peersite, peerconn := range s.conns {
-		if site == peersite {
-			peerconn.cmsgs <- ack{rev}
+	send := func(pdesc *desc) {
+		if pdesc == d {
+			pdesc.conn.msgs <- ack{rev}
 		} else {
-			peerconn.cmsgs <- write{site, rev, ops2}
+			pdesc.conn.mu.Lock()
+			defer pdesc.conn.mu.Unlock()
+
+			pdesc.conn.msgs <- write{rev, ops2}
 		}
+	}
+
+	for pdesc, _ := range doc.descs {
+		send(pdesc)
 	}
 }
 
-func (s *Server) readConn(conn otconn) {
+func (s *Server) readConn(c *conn) {
+	// XXX: need to properly lock c + detect channel closure...
 	for {
 		var m msg.OTClientMsg
 
-		if err := conn.conn.ReadJSON(&m); err != nil {
+		if err := c.ws.ReadJSON(&m); err != nil {
 			glog.Errorf("reading ops; got err %q", err)
 			return
 		}
 
-		glog.Infof("site: %d, read acks: %d, ops: %s", conn.site, m.Rev, m.Ops)
+		glog.Infof("conn: %p, read acks: %d, ops: %s", c, m.Rev, m.Ops)
 
-		s.transformOps(conn.site, m.Rev, m.Ops)
+		s.transformOps(c, m.Rev, m.Ops)
 
-		glog.Infof("site: %d, done enqueueing", conn.site)
+		glog.Infof("conn: %p, done enqueueing", c)
 	}
 }
 
@@ -129,9 +209,8 @@ type ack struct {
 }
 
 type write struct {
-	site int
-	rev  int
-	ops  ot.Ops
+	rev int
+	ops ot.Ops
 }
 
 func (s *Server) Run() error {
@@ -153,57 +232,44 @@ func (s *Server) Run() error {
 		WriteBufferSize: 1024,
 	}
 	m.Get("/ws", func(w http.ResponseWriter, r *http.Request) {
-		siteBig, err := rand.Int(rand.Reader, big.NewInt(1e9))
-		if err != nil {
-			glog.Errorf("unable to generate random site id, err: %q", err)
-			return
-		}
-		site := int(siteBig.Int64())
-
-		conn, err := upgrader.Upgrade(w, r, nil)
+		ws, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
 			glog.Errorf("unable to upgrade incoming websocket connection, err: %q", err)
 			return
 		}
-		defer s.closeConn(site)
-		otc := s.addConn(site, conn)
 
-		go s.readConn(otc)
+		c := &conn{
+			mu:    sync.Mutex{},
+			msgs:  make(chan interface{}),
+			ws:    ws,
+			descs: map[*desc]struct{}{},
+		}
 
-		for cmsg := range otc.cmsgs {
-			glog.Infof("site: %d: cmsg: %#v", site, cmsg)
-			switch v := cmsg.(type) {
+		defer s.closeConn(c)
+
+		s.addConn(c)
+
+		go s.readConn(c)
+
+		for m := range c.msgs {
+			glog.Infof("conn: %p: msg: %#v", c, m)
+			switch v := m.(type) {
 			case ack:
-				otc.conn.WriteJSON(msg.OTServerMsg{
-					Site: site,
-					Rev:  v.rev,
-					Ack:  true,
-					Ops:  nil,
+				c.ws.WriteJSON(msg.OTServerMsg{
+					Rev: v.rev,
+					Ack: true,
+					Ops: nil,
 				})
 			case write:
-				otc.conn.WriteJSON(msg.OTServerMsg{
-					Site: v.site,
-					Rev:  v.rev,
-					Ack:  false,
-					Ops:  v.ops,
+				c.ws.WriteJSON(msg.OTServerMsg{
+					Rev: v.rev,
+					Ack: false,
+					Ops: v.ops,
 				})
 			}
 		}
 
-		glog.Infof("site %d: exiting", site)
-	})
-
-	m.Get("/register_site.json", func(x render.Render) {
-		site, err := rand.Int(rand.Reader, big.NewInt(1e9))
-		if err != nil {
-			glog.Errorf("unable to generate random site id, err: %q", err)
-			jsonError(x, http.StatusInternalServerError, "")
-			return
-		}
-
-		glog.Infof("registering site")
-
-		x.JSON(200, site.Int64())
+		glog.Infof("conn %p: exiting", c)
 	})
 
 	m.Run()

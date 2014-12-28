@@ -107,7 +107,6 @@ func StartEnd(doc js.Object, start, end int) js.Object {
 }
 
 type Adapter struct {
-	site     int
 	conn     js.Object
 	session  js.Object
 	doc      js.Object
@@ -131,9 +130,8 @@ func (a *Adapter) IsSuppressed() bool {
 func (a *Adapter) Send(ops ot.Ops) {
 	if !a.suppress {
 		jsOps, _ := json.Marshal(msg.OTClientMsg{
-			Site: a.site,
-			Rev:  a.rev,
-			Ops:  ops,
+			Rev: a.rev,
+			Ops: ops,
 		})
 		alert.Golang(fmt.Sprintf("got ops: %s", jsOps))
 		a.conn.Call("send", jsOps)
@@ -184,8 +182,7 @@ func (a *Adapter) AttachEditor(session js.Object, doc js.Object) {
 	doc.Call("on", "change", a.OnChange)
 }
 
-func (a *Adapter) AttachSocket(site int, state *ot.State, conn js.Object) {
-	a.site = site
+func (a *Adapter) AttachSocket(state *ot.State, conn js.Object) {
 	a.state = state
 	a.conn = conn
 }

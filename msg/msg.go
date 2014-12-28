@@ -9,14 +9,12 @@ import (
 )
 
 type OTServerMsg struct {
-	Site int
-	Rev  int
-	Ack  bool
-	Ops  ot.Ops
+	Rev int
+	Ack bool
+	Ops ot.Ops
 }
 
 type OTClientMsg struct {
-	Site int
-	Rev  int
-	Ops  ot.Ops
+	Rev int
+	Ops ot.Ops
 }

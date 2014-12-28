@@ -6,8 +6,6 @@
 package main
 
 import (
-	"fmt"
-
 	ng "github.com/gopherjs/go-angularjs"
 	"github.com/gopherjs/gopherjs/js"
 
@@ -89,15 +87,6 @@ func main() {
 			}
 		})
 
-		// acquire site-id + attach adapter to socket
-		http.Request(ng.HttpConfig(
-			ng.ReqMethod{ng.HttpGet},
-			ng.ReqUrl{"/register_site.json"},
-		)).Success(func(site *int, status int) {
-			alert.String("got site id: " + fmt.Sprintf("%d", *site))
-			adapter.AttachSocket(*site, &state, conn)
-		}).Error(func(data *string) {
-			alert.String("oops -- no site id")
-		})
+		adapter.AttachSocket(&state, conn)
 	})
 }
