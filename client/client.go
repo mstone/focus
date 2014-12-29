@@ -8,6 +8,7 @@ package main
 import (
 	ng "github.com/gopherjs/go-angularjs"
 	"github.com/gopherjs/gopherjs/js"
+	"github.com/mstone/focus/msg"
 
 	"github.com/mstone/focus/js/ace"
 	"github.com/mstone/focus/js/alert"
@@ -60,17 +61,17 @@ func main() {
 			obj := js.Global.Get("JSON").Call("parse", e.Get("data"))
 
 			rev := obj.Get("Rev").Int()
-			ackObj := obj.Get("Ack")
+			cmdObj := obj.Get("Cmd")
 			opsObj := obj.Get("Ops")
 
 			switch {
 			default:
 				alert.JSON(obj)
 				panic("unknown message")
-			case !ackObj.IsUndefined() && !ackObj.IsNull() && ackObj.Bool() == true:
+			case !cmdObj.IsUndefined() && !cmdObj.IsNull() && msg.Cmd(cmdObj.Int()) == msg.C_ACK:
 				alert.String("ack!")
 				state = state.Ack(&adapter, rev)
-			case !opsObj.IsUndefined() && !opsObj.IsNull():
+			case !cmdObj.IsUndefined() && !cmdObj.IsNull() && msg.Cmd(cmdObj.Int()) == msg.C_WRITE && !opsObj.IsUndefined() && !opsObj.IsNull():
 				alert.String("write!")
 				ops := make(ot.Ops, opsObj.Length())
 				for i := 0; i < opsObj.Length(); i++ {

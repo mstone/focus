@@ -212,11 +212,17 @@ func (s *Server) readConn(c *conn) {
 			return
 		}
 
-		glog.Infof("conn: %p, read acks: %d, ops: %s", c, m.Rev, m.Ops)
-
-		s.transformOps(c, m.Rev, m.Ops)
-
-		glog.Infof("conn: %p, done enqueueing", c)
+		switch m.Cmd {
+		// case m.C_OPEN:
+		case msg.C_WRITE:
+			glog.Infof("conn: %p, read acks: %d, ops: %s", c, m.Rev, m.Ops)
+			s.transformOps(c, m.Rev, m.Ops)
+			glog.Infof("conn: %p, done enqueueing", c)
+		default:
+			glog.Errorf("conn: %p, got unknown cmd: %q, exiting", c, m)
+			s.closeConn(c)
+			return
+		}
 	}
 }
 
@@ -272,14 +278,13 @@ func (s *Server) Run() error {
 			switch v := m.(type) {
 			case ack:
 				c.ws.WriteJSON(msg.OTServerMsg{
+					Cmd: msg.C_ACK,
 					Rev: v.rev,
-					Ack: true,
-					Ops: nil,
 				})
 			case write:
 				c.ws.WriteJSON(msg.OTServerMsg{
+					Cmd: msg.C_WRITE,
 					Rev: v.rev,
-					Ack: false,
 					Ops: v.ops,
 				})
 			}

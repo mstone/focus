@@ -8,13 +8,25 @@ import (
 	"github.com/mstone/focus/ot"
 )
 
+type Cmd int
+
+const (
+	C_OPEN Cmd = iota
+	C_WRITE
+	C_ACK
+)
+
 type OTServerMsg struct {
-	Rev int
-	Ack bool
-	Ops ot.Ops
+	Cmd Cmd
+	Fd  int    `json:",omitempty"`
+	Rev int    `json:",omitempty"`
+	Ops ot.Ops `json:",omitempty"`
 }
 
 type OTClientMsg struct {
-	Rev int
-	Ops ot.Ops
+	Cmd  Cmd
+	Name string `json:",omitempty"`
+	Fd   int    `json:",omitempty"`
+	Rev  int    `json:",omitempty"`
+	Ops  ot.Ops `json:",omitempty"`
 }
