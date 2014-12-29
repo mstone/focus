@@ -269,7 +269,7 @@ Fix:
 			case a.IsInsert() && b.IsRetain():
 				ops.Insert(a.Body[:minlen])
 			case a.IsInsert() && b.IsDelete():
-				ops.Delete(minlen)
+				//ops.Delete(minlen)
 			}
 			a, b = shortenOps(a, b)
 			if a == nil {
