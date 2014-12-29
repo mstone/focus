@@ -133,7 +133,7 @@ func (a *Adapter) Send(ops ot.Ops) {
 			Rev: a.rev,
 			Ops: ops,
 		})
-		alert.Golang(fmt.Sprintf("got ops: %s", jsOps))
+		alert.Golang(fmt.Sprintf("sending jsops: %s", jsOps))
 		a.conn.Call("send", jsOps)
 	}
 }
@@ -189,6 +189,7 @@ func (a *Adapter) AttachSocket(state *ot.State, conn js.Object) {
 
 func (a *Adapter) OnChange(change js.Object) bool {
 	if a.IsSuppressed() {
+		alert.String("change SUPPRESSED")
 		return true
 	}
 	length := a.session.Call("getValue").Length()
