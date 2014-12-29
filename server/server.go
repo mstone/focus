@@ -240,7 +240,7 @@ func (s *Server) Run() error {
 
 		c := &conn{
 			mu:    sync.Mutex{},
-			msgs:  make(chan interface{}),
+			msgs:  make(chan interface{}, 5),
 			ws:    ws,
 			descs: map[*desc]struct{}{},
 		}
