@@ -40,7 +40,8 @@ type desc struct {
 type doc struct {
 	mu    sync.Mutex
 	descs map[*desc]struct{}
-	hist  ot.Ops
+	hist  []ot.Ops
+	comp  ot.Ops
 }
 
 type Server struct {
@@ -63,7 +64,7 @@ func New(c Config) *Server {
 	doc := &doc{
 		mu:    sync.Mutex{},
 		descs: map[*desc]struct{}{},
-		hist:  ot.Ops{},
+		hist:  []ot.Ops{},
 	}
 
 	s.docs[doc] = struct{}{}
@@ -99,6 +100,13 @@ func (s *Server) addConn(c *conn) {
 	c.descs[d] = struct{}{}
 	s.descs[d] = struct{}{}
 	doc.descs[d] = struct{}{}
+
+	if len(doc.hist) > 0 {
+		c.msgs <- write{
+			rev: len(doc.hist),
+			ops: doc.comp,
+		}
+	}
 }
 
 func (s *Server) closeConn(c *conn) {
@@ -151,21 +159,29 @@ func (s *Server) transformOps(c *conn, rev int, ops ot.Ops) {
 	doc.mu.Lock()
 	defer doc.mu.Unlock()
 
-	var concurrent ot.Ops
+	pops := []ot.Ops{}
 	if rev < len(doc.hist) {
-		concurrent = doc.hist[rev:]
+		pops = doc.hist[rev:]
 	}
-	glog.Infof("conn: %p, desc: %p, doc: %p, found %d concurrent ops", c, d, doc, len(concurrent))
+	glog.Infof("conn: %p, desc: %p, doc: %p, found %d concurrent ops-lists", c, d, doc, len(pops))
 
-	// go func() {
-	// 	time.Sleep(1 * time.Second)
-	// 	panic("boom")
-	// }()
+	concurrent := ot.Ops{}
+	for _, pop := range pops {
+		concurrent = append(concurrent, pop...)
+	}
+
+	// transform ops
 	ops2, concurrent2 := ot.Transform(ops, concurrent)
-
 	glog.Infof("transform:\n\tops: %s -> ops2: %s\n\tcon: %s -> con2: %s", ops.String(), ops2.String(), concurrent.String(), concurrent2.String())
 
-	doc.hist = append(doc.hist, ops2...)
+	hist := doc.hist
+	comp := doc.comp
+	hist2 := append(doc.hist, ops2)
+	comp2 := ot.Compose(doc.comp, ops2)
+
+	glog.Infof("doc:\n\thist : %s\n\thist2: %s\n\tcomp : %s\n\tops2 : %s\n\tcomp2: %s", hist, hist2, comp, ops2, comp2)
+	doc.hist = hist2
+	doc.comp = comp2
 	rev = len(doc.hist)
 
 	glog.Infof("conn: %p, enqueueing", c)
