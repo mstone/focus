@@ -184,3 +184,38 @@ func TestConcurrent(t *testing.T) {
 	}
 	doTable(t, table)
 }
+
+type ComposeCase struct {
+	A [2]Ops
+	B Ops
+}
+
+func doComposeTable(t *testing.T, cases []ComposeCase) {
+	for idx, c := range cases {
+		a := Compose(c.A[0], c.A[1])
+		if !reflect.DeepEqual(a, c.B) {
+			t.Errorf("compose %d failed; %s -> %s != expected %s", idx, c.A, a, c.B)
+		}
+	}
+}
+
+func TestCompose(t *testing.T) {
+	table := []ComposeCase{
+		ComposeCase{
+			A: [2]Ops{
+				Ops{Op{0, []rune{'a'}}},
+				Ops{Op{1, nil}, Op{0, []rune{'b'}}},
+			},
+			B: Ops{Op{0, []rune{'a', 'b'}}},
+		},
+		ComposeCase{
+			A: [2]Ops{
+				Ops{Op{0, []rune{'a'}}},
+				Ops{Op{-1, nil}},
+			},
+			B: Ops{},
+		},
+	}
+
+	doComposeTable(t, table)
+}
