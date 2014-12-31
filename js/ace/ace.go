@@ -129,7 +129,7 @@ func (a *Adapter) IsSuppressed() bool {
 
 func (a *Adapter) Send(ops ot.Ops) {
 	if !a.suppress {
-		jsOps, _ := json.Marshal(msg.OTClientMsg{
+		jsOps, _ := json.Marshal(msg.Msg{
 			Cmd: msg.C_WRITE,
 			Rev: a.rev,
 			Ops: ops,

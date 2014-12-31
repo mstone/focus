@@ -202,10 +202,14 @@ func (s *Server) transformOps(c *conn, rev int, ops ot.Ops) {
 	}
 }
 
+func (s *Server) openDoc(c *conn, name string) {
+
+}
+
 func (s *Server) readConn(c *conn) {
 	// XXX: need to properly lock c + detect channel closure...
 	for {
-		var m msg.OTClientMsg
+		var m msg.Msg
 
 		if err := c.ws.ReadJSON(&m); err != nil {
 			glog.Errorf("reading ops; got err %q", err)
@@ -213,15 +217,18 @@ func (s *Server) readConn(c *conn) {
 		}
 
 		switch m.Cmd {
-		// case m.C_OPEN:
-		case msg.C_WRITE:
-			glog.Infof("conn: %p, read acks: %d, ops: %s", c, m.Rev, m.Ops)
-			s.transformOps(c, m.Rev, m.Ops)
-			glog.Infof("conn: %p, done enqueueing", c)
 		default:
 			glog.Errorf("conn: %p, got unknown cmd: %q, exiting", c, m)
 			s.closeConn(c)
 			return
+		case msg.C_OPEN:
+			glog.Infof("conn: %p, opening doc %q", c, m.Name)
+			s.openDoc(c, m.Name)
+			glog.Infof("conn: %p, done enqueueing", c)
+		case msg.C_WRITE:
+			glog.Infof("conn: %p, read acks: %d, ops: %s", c, m.Rev, m.Ops)
+			s.transformOps(c, m.Rev, m.Ops)
+			glog.Infof("conn: %p, done enqueueing", c)
 		}
 	}
 }
@@ -277,12 +284,12 @@ func (s *Server) Run() error {
 			glog.Infof("conn: %p: msg: %#v", c, m)
 			switch v := m.(type) {
 			case ack:
-				c.ws.WriteJSON(msg.OTServerMsg{
-					Cmd: msg.C_ACK,
+				c.ws.WriteJSON(msg.Msg{
+					Cmd: msg.C_WRITE_RESP,
 					Rev: v.rev,
 				})
 			case write:
-				c.ws.WriteJSON(msg.OTServerMsg{
+				c.ws.WriteJSON(msg.Msg{
 					Cmd: msg.C_WRITE,
 					Rev: v.rev,
 					Ops: v.ops,

@@ -6,6 +6,8 @@
 package main
 
 import (
+	"encoding/json"
+	"fmt"
 	ng "github.com/gopherjs/go-angularjs"
 	"github.com/gopherjs/gopherjs/js"
 	"github.com/mstone/focus/msg"
@@ -55,36 +57,34 @@ func main() {
 		conn.Set("onopen", func(e js.Object) {
 			alert.String("WEBSOCKET OPEN")
 			state = &ot.Synchronized{}
+			jsOps, _ := json.Marshal(msg.Msg{
+				Cmd:  msg.C_OPEN,
+				Name: "index.txt",
+			})
+			alert.Golang(fmt.Sprintf("opening doc: %s", jsOps))
+			conn.Call("send", jsOps)
 		})
 		conn.Set("onmessage", func(e js.Object) {
 			alert.String("WEBSOCKET GOT MSG: " + e.Get("data").Str())
-			obj := js.Global.Get("JSON").Call("parse", e.Get("data"))
+			//obj := js.Global.Get("JSON").Call("parse", e.Get("data"))
+			m := msg.Msg{}
 
-			rev := obj.Get("Rev").Int()
-			cmdObj := obj.Get("Cmd")
-			opsObj := obj.Get("Ops")
+			err := json.Unmarshal([]byte(e.Get("data").Str()), &m)
+			if err != nil {
+				alert.Golang(err)
+				panic(err.Error())
+			}
 
-			switch {
+			switch m.Cmd {
 			default:
-				alert.JSON(obj)
+				alert.Golang(m)
 				panic("unknown message")
-			case !cmdObj.IsUndefined() && !cmdObj.IsNull() && msg.Cmd(cmdObj.Int()) == msg.C_ACK:
+			case msg.C_WRITE_RESP:
 				alert.String("ack!")
-				state = state.Ack(&adapter, rev)
-			case !cmdObj.IsUndefined() && !cmdObj.IsNull() && msg.Cmd(cmdObj.Int()) == msg.C_WRITE && !opsObj.IsUndefined() && !opsObj.IsNull():
+				state = state.Ack(&adapter, m.Rev)
+			case msg.C_WRITE:
 				alert.String("write!")
-				ops := make(ot.Ops, opsObj.Length())
-				for i := 0; i < opsObj.Length(); i++ {
-					op := opsObj.Index(i)
-					opi := op.Interface()
-					switch v := opi.(type) {
-					case float64:
-						ops[i] = ot.Op{Size: int(v)}
-					case string:
-						ops[i] = ot.Op{Body: ot.AsSlice(v)}
-					}
-				}
-				state = state.Server(&adapter, rev, ops)
+				state = state.Server(&adapter, m.Rev, m.Ops)
 			}
 		})
 

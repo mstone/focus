@@ -12,18 +12,12 @@ type Cmd int
 
 const (
 	C_OPEN Cmd = iota
+	C_OPEN_RESP
 	C_WRITE
-	C_ACK
+	C_WRITE_RESP
 )
 
-type OTServerMsg struct {
-	Cmd Cmd
-	Fd  int    `json:",omitempty"`
-	Rev int    `json:",omitempty"`
-	Ops ot.Ops `json:",omitempty"`
-}
-
-type OTClientMsg struct {
+type Msg struct {
 	Cmd  Cmd
 	Name string `json:",omitempty"`
 	Fd   int    `json:",omitempty"`
