@@ -52,16 +52,19 @@ mkdir -p $GOPATH/{pkg,src,bin}
 
 export PATH=$GOPATH/bin:$PATH
 
-go get -d github.com/gopherjs/gopherjs
-cd $GOPATH/src/github.com/gopherjs/gopherjs
+go get -u github.com/tools/godep
+
+go get -d github.com/mstone/gopherjs
+cd $GOPATH/src/github.com/mstone/gopherjs
 git remote update
-git reset --hard 61c1239f50c65aabdb00ad1a82cf493ea3272823
-go install
+git checkout -b go1.3 origin/go1.3
+godep go install
 
 go get -d github.com/mstone/focus
 cd $GOPATH/src/github.com/mstone/focus
 git submodule init
 git submodule update
+godep restore
 ./run.sh
 ```
 
@@ -78,22 +81,30 @@ binaries:
     ```
 
 2. focus build-depends on some other programs written in go, notably
+[godep](https://github.com/tools/godep) and
 [gopherjs](https://github.com/gopherjs/gopherjs). Therefore, we add the
 `$GOPATH/bin` folder to our `PATH` environment variable:
 
     ```bash
     export PATH=$GOPATH/bin:$PATH
     ```
-    
-3. gopherjs is still under active development so, for now, we recommend using
-some fairly specific known-good versions of gopherjs, such as this one:
+
+3. gopherjs and focus are still under active development so, for now, we
+recommend using [godep](https://github.com/tools/godep) to stay in sync with
+our versions of the relevant build-deps:
 
     ```bash
-    go get -d github.com/gopherjs/gopherjs
-    cd $GOPATH/src/github.com/gopherjs/gopherjs
+    go get -u github.com/tools/godep
+    ```
+
+Next, some fairly specific known-good versions of gopherjs, such as this one:
+
+    ```bash
+    go get -d github.com/mstone/gopherjs
+    cd $GOPATH/src/github.com/mstone/gopherjs
     git remote update
-    git reset --hard 61c1239f50c65aabdb00ad1a82cf493ea3272823
-    go install
+    git checkout -b go1.3 origin/go1.3
+    godep go install
     ```
 
 4. finally, focus uses some existing javascript libraries like
@@ -107,5 +118,6 @@ does not automatically check out:
     cd $GOPATH/src/github.com/mstone/focus
     git submodule init
     git submodule update
+    godep restore
     ./run.sh
     ```
