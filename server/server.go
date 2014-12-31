@@ -27,11 +27,12 @@ type conn struct {
 	mu    sync.Mutex
 	msgs  chan interface{}
 	ws    *websocket.Conn
-	descs map[*desc]struct{}
+	descs map[int]*desc
 }
 
 // struct desc represents an open VPP pad description (like an fd)
 type desc struct {
+	no   int
 	conn *conn
 	doc  *doc
 }
@@ -50,6 +51,8 @@ type Server struct {
 	conns map[*conn]struct{}
 	descs map[*desc]struct{}
 	docs  map[*doc]struct{}
+	names map[string]*doc
+	next  int
 }
 
 func New(c Config) *Server {
@@ -59,15 +62,9 @@ func New(c Config) *Server {
 		conns: map[*conn]struct{}{},
 		descs: map[*desc]struct{}{},
 		docs:  map[*doc]struct{}{},
+		names: map[string]*doc{},
+		next:  1,
 	}
-
-	doc := &doc{
-		mu:    sync.Mutex{},
-		descs: map[*desc]struct{}{},
-		hist:  []ot.Ops{},
-	}
-
-	s.docs[doc] = struct{}{}
 
 	return s
 }
@@ -80,33 +77,7 @@ func (s *Server) addConn(c *conn) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	var doc *doc
-	for d2, _ := range s.docs {
-		doc = d2
-	}
-
-	doc.mu.Lock()
-	defer doc.mu.Unlock()
-
-	d := &desc{
-		conn: c,
-		doc:  doc,
-	}
-
 	s.conns[c] = struct{}{}
-	c.descs[d] = struct{}{}
-	s.descs[d] = struct{}{}
-	doc.descs[d] = struct{}{}
-
-	if len(doc.hist) > 0 {
-		c.msgs <- write{
-			rev: len(doc.hist),
-			ops: doc.comp,
-		}
-	}
 }
 
 func (s *Server) closeConn(c *conn) {
@@ -127,17 +98,17 @@ func (s *Server) closeConn(c *conn) {
 
 		delete(desc.doc.descs, desc)
 		delete(s.descs, desc)
-		delete(c.descs, desc)
+		delete(c.descs, desc.no)
 	}
 
-	for desc, _ := range c.descs {
+	for _, desc := range c.descs {
 		unlink(desc)
 	}
 
 	delete(s.conns, c)
 }
 
-func (s *Server) transformOps(c *conn, rev int, ops ot.Ops) {
+func (s *Server) transformOps(c *conn, fd int, rev int, ops ot.Ops) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -147,9 +118,9 @@ func (s *Server) transformOps(c *conn, rev int, ops ot.Ops) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	var d *desc
-	for d2, _ := range c.descs {
-		d = d2
+	d, ok := c.descs[fd]
+	if !ok {
+		glog.Errorf("conn: %p, fd: %d, rev: %d: invalid fd", c, fd, rev)
 	}
 
 	// extract doc
@@ -188,7 +159,7 @@ func (s *Server) transformOps(c *conn, rev int, ops ot.Ops) {
 
 	send := func(pdesc *desc) {
 		if pdesc == d {
-			pdesc.conn.msgs <- ack{rev}
+			pdesc.conn.msgs <- writeresp{rev}
 		} else {
 			pdesc.conn.mu.Lock()
 			defer pdesc.conn.mu.Unlock()
@@ -203,7 +174,47 @@ func (s *Server) transformOps(c *conn, rev int, ops ot.Ops) {
 }
 
 func (s *Server) openDoc(c *conn, name string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
+	d, ok := s.names[name]
+	if !ok {
+		d = &doc{
+			mu:    sync.Mutex{},
+			descs: map[*desc]struct{}{},
+			hist:  []ot.Ops{},
+			comp:  ot.Ops{},
+		}
+		s.names[name] = d
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	fd := &desc{
+		no:   s.next,
+		conn: c,
+		doc:  d,
+	}
+	s.next++
+
+	c.descs[fd.no] = fd
+	d.descs[fd] = struct{}{}
+
+	c.msgs <- openresp{
+		name: name,
+		fd:   fd.no,
+	}
+
+	if len(d.hist) > 0 {
+		c.msgs <- write{
+			rev: len(d.hist),
+			ops: d.comp,
+		}
+	}
 }
 
 func (s *Server) readConn(c *conn) {
@@ -224,16 +235,23 @@ func (s *Server) readConn(c *conn) {
 		case msg.C_OPEN:
 			glog.Infof("conn: %p, opening doc %q", c, m.Name)
 			s.openDoc(c, m.Name)
-			glog.Infof("conn: %p, done enqueueing", c)
+			glog.Infof("conn: %p, done opening", c)
 		case msg.C_WRITE:
 			glog.Infof("conn: %p, read acks: %d, ops: %s", c, m.Rev, m.Ops)
-			s.transformOps(c, m.Rev, m.Ops)
+			s.transformOps(c, m.Fd, m.Rev, m.Ops)
 			glog.Infof("conn: %p, done enqueueing", c)
 		}
 	}
 }
 
-type ack struct {
+type open struct{}
+
+type openresp struct {
+	name string
+	fd   int
+}
+
+type writeresp struct {
 	rev int
 }
 
@@ -271,7 +289,7 @@ func (s *Server) Run() error {
 			mu:    sync.Mutex{},
 			msgs:  make(chan interface{}, 5),
 			ws:    ws,
-			descs: map[*desc]struct{}{},
+			descs: map[int]*desc{},
 		}
 
 		defer s.closeConn(c)
@@ -283,7 +301,13 @@ func (s *Server) Run() error {
 		for m := range c.msgs {
 			glog.Infof("conn: %p: msg: %#v", c, m)
 			switch v := m.(type) {
-			case ack:
+			case openresp:
+				c.ws.WriteJSON(msg.Msg{
+					Cmd:  msg.C_OPEN_RESP,
+					Name: v.name,
+					Fd:   v.fd,
+				})
+			case writeresp:
 				c.ws.WriteJSON(msg.Msg{
 					Cmd: msg.C_WRITE_RESP,
 					Rev: v.rev,

@@ -112,6 +112,7 @@ type Adapter struct {
 	doc      js.Object
 	state    *ot.State
 	suppress bool
+	fd       int
 	rev      int
 }
 
@@ -131,6 +132,7 @@ func (a *Adapter) Send(ops ot.Ops) {
 	if !a.suppress {
 		jsOps, _ := json.Marshal(msg.Msg{
 			Cmd: msg.C_WRITE,
+			Fd:  a.fd,
 			Rev: a.rev,
 			Ops: ops,
 		})
@@ -175,6 +177,10 @@ func (a *Adapter) Recv(rev int, ops ot.Ops) {
 	}
 
 	a.rev = rev
+}
+
+func (a *Adapter) AttachFd(fd int) {
+	a.fd = fd
 }
 
 func (a *Adapter) AttachEditor(session js.Object, doc js.Object) {

@@ -79,6 +79,9 @@ func main() {
 			default:
 				alert.Golang(m)
 				panic("unknown message")
+			case msg.C_OPEN_RESP:
+				alert.String("open resp!")
+				adapter.AttachFd(m.Fd)
 			case msg.C_WRITE_RESP:
 				alert.String("ack!")
 				state = state.Ack(&adapter, m.Rev)
