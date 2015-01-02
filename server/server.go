@@ -175,12 +175,12 @@ func (s *Server) transformOps(c *conn, fd int, rev int, ops ot.Ops) {
 
 	send := func(pdesc *desc) {
 		if pdesc == d {
-			pdesc.conn.msgs <- writeresp{rev}
+			pdesc.conn.msgs <- writeresp{fd, rev}
 		} else {
 			pdesc.conn.mu.Lock()
 			defer pdesc.conn.mu.Unlock()
 
-			pdesc.conn.msgs <- write{rev, ops2}
+			pdesc.conn.msgs <- write{fd, rev, ops2}
 		}
 	}
 
@@ -227,6 +227,7 @@ func (s *Server) openDoc(c *conn, name string) {
 
 	if len(d.hist) > 0 {
 		c.msgs <- write{
+			fd:  fd.no,
 			rev: len(d.hist),
 			ops: d.comp,
 		}
@@ -273,11 +274,13 @@ func (s *Server) writeConn(c *conn) {
 		case writeresp:
 			c.ws.WriteJSON(msg.Msg{
 				Cmd: msg.C_WRITE_RESP,
+				Fd:  v.fd,
 				Rev: v.rev,
 			})
 		case write:
 			c.ws.WriteJSON(msg.Msg{
 				Cmd: msg.C_WRITE,
+				Fd:  v.fd,
 				Rev: v.rev,
 				Ops: v.ops,
 			})
@@ -293,10 +296,12 @@ type openresp struct {
 }
 
 type writeresp struct {
+	fd  int
 	rev int
 }
 
 type write struct {
+	fd  int
 	rev int
 	ops ot.Ops
 }
