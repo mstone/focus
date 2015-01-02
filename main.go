@@ -19,6 +19,7 @@ import (
 
 var driver = flag.String("driver", "sqlite3", "database/sql driver")
 var dsn = flag.String("dsn", ":memory:", "database/sql dsn")
+var api = flag.String("api", "ws://localhost:3000/ws", "API endpoint")
 
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
@@ -52,6 +53,7 @@ func main() {
 
 	serverCfg := server.Config{
 		Store: store,
+		API:   *api,
 	}
 
 	server := server.New(serverCfg)

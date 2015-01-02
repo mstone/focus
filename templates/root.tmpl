@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-	<title>Focus</title>
+	<title>Focus: {{.Name}}</title>
     <script src="/ace-builds/src-noconflict/ace.js" type="text/javascript" charset="utf-8"></script>
 	<style>
 	    #editor {
@@ -16,7 +16,7 @@
 	</style>
 </head>
 <body>
-    <div id="editor" data-vpp-name="{{.}}"></div>
+    <div id="editor" data-vpp-api="{{.API}}" data-vpp-name="{{.Name}}"></div>
 	<script src="/client.js"></script>
 </body>
 </html>

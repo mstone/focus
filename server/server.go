@@ -19,6 +19,7 @@ import (
 )
 
 type Config struct {
+	API   string
 	Store *store.Store
 }
 
@@ -48,6 +49,7 @@ type doc struct {
 type Server struct {
 	mu    sync.Mutex
 	store *store.Store
+	api   string
 	conns map[*conn]struct{}
 	descs map[*desc]struct{}
 	docs  map[*doc]struct{}
@@ -59,6 +61,7 @@ func New(c Config) *Server {
 	s := &Server{
 		mu:    sync.Mutex{},
 		store: c.Store,
+		api:   c.API,
 		conns: map[*conn]struct{}{},
 		descs: map[*desc]struct{}{},
 		docs:  map[*doc]struct{}{},
@@ -321,7 +324,13 @@ func (s *Server) Run() error {
 	})
 
 	m.Get("/**", func(x render.Render, r *http.Request) {
-		x.HTML(200, "root", r.URL.Path)
+		v := struct {
+			API, Name string
+		}{
+			API:  s.api,
+			Name: r.URL.Path,
+		}
+		x.HTML(200, "root", v)
 	})
 
 	m.Run()

@@ -44,14 +44,18 @@ func main() {
 	adapter.AttachEditor(session, doc)
 
 	// configure socket
-	conn = js.Global.Get("WebSocket").New("ws://localhost:3000/ws")
+	apiEndPoint := aceDiv.Get("dataset").Get("vppApi")
+	vaporpadName := aceDiv.Get("dataset").Get("vppName")
+
+	conn = js.Global.Get("WebSocket").New(apiEndPoint.Str())
+
 	conn.Set("onclose", func(e js.Object) {
 	})
 	conn.Set("onopen", func(e js.Object) {
 		state = &ot.Synchronized{}
 		jsOps, _ := json.Marshal(msg.Msg{
 			Cmd:  msg.C_OPEN,
-			Name: aceDiv.Get("dataset").Get("vppName").Str(),
+			Name: vaporpadName.Str(),
 		})
 		conn.Call("send", jsOps)
 	})
