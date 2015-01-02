@@ -244,6 +244,31 @@ func (s *Server) readConn(c *conn) {
 	}
 }
 
+func (s *Server) writeConn(c *conn) {
+	for m := range c.msgs {
+		glog.Infof("conn: %p: msg: %#v", c, m)
+		switch v := m.(type) {
+		case openresp:
+			c.ws.WriteJSON(msg.Msg{
+				Cmd:  msg.C_OPEN_RESP,
+				Name: v.name,
+				Fd:   v.fd,
+			})
+		case writeresp:
+			c.ws.WriteJSON(msg.Msg{
+				Cmd: msg.C_WRITE_RESP,
+				Rev: v.rev,
+			})
+		case write:
+			c.ws.WriteJSON(msg.Msg{
+				Cmd: msg.C_WRITE,
+				Rev: v.rev,
+				Ops: v.ops,
+			})
+		}
+	}
+}
+
 type open struct{}
 
 type openresp struct {
@@ -290,28 +315,7 @@ func (s *Server) Run() error {
 
 		go s.readConn(c)
 
-		for m := range c.msgs {
-			glog.Infof("conn: %p: msg: %#v", c, m)
-			switch v := m.(type) {
-			case openresp:
-				c.ws.WriteJSON(msg.Msg{
-					Cmd:  msg.C_OPEN_RESP,
-					Name: v.name,
-					Fd:   v.fd,
-				})
-			case writeresp:
-				c.ws.WriteJSON(msg.Msg{
-					Cmd: msg.C_WRITE_RESP,
-					Rev: v.rev,
-				})
-			case write:
-				c.ws.WriteJSON(msg.Msg{
-					Cmd: msg.C_WRITE,
-					Rev: v.rev,
-					Ops: v.ops,
-				})
-			}
-		}
+		s.writeConn(c)
 
 		glog.Infof("conn %p: exiting", c)
 	})
