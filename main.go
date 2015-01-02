@@ -7,6 +7,8 @@ package main
 import (
 	"database/sql"
 	"flag"
+	"net/http"
+	"net/url"
 	"runtime"
 	"time"
 
@@ -56,9 +58,17 @@ func main() {
 		API:   *api,
 	}
 
-	server := server.New(serverCfg)
+	server, err := server.New(serverCfg)
+	if err != nil {
+		glog.Fatalf("unable to configure server, err: %q", err)
+	}
 
-	err = server.Run()
+	apiUrl, err := url.Parse(*api)
+	if err != nil {
+		glog.Fatalf("unable to parse API URL, err: %q", err)
+	}
+
+	err = http.ListenAndServe(apiUrl.Host, server)
 	if err != nil {
 		glog.Fatalf("unable to run server, err: %q", err)
 	}

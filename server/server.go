@@ -47,6 +47,7 @@ type doc struct {
 }
 
 type Server struct {
+	m     *martini.ClassicMartini
 	mu    sync.Mutex
 	store *store.Store
 	api   string
@@ -57,7 +58,7 @@ type Server struct {
 	next  int
 }
 
-func New(c Config) *Server {
+func New(c Config) (*Server, error) {
 	s := &Server{
 		mu:    sync.Mutex{},
 		store: c.Store,
@@ -69,7 +70,17 @@ func New(c Config) *Server {
 		next:  1,
 	}
 
-	return s
+	err := s.configure()
+	if err != nil {
+		glog.Errorf("unable to configure server, err: %q", err)
+		return nil, err
+	}
+
+	return s, nil
+}
+
+func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	s.m.ServeHTTP(w, r)
 }
 
 func jsonError(x render.Render, status int, v interface{}) {
@@ -288,7 +299,7 @@ type write struct {
 	ops ot.Ops
 }
 
-func (s *Server) Run() error {
+func (s *Server) configure() error {
 	m := martini.Classic()
 
 	upgrader := websocket.Upgrader{
@@ -333,7 +344,7 @@ func (s *Server) Run() error {
 		x.HTML(200, "root", v)
 	})
 
-	m.Run()
+	s.m = m
 
 	return nil
 }
