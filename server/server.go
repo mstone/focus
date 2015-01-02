@@ -5,7 +5,9 @@
 package server
 
 import (
+	"go/build"
 	"net/http"
+	"path"
 	"sync"
 
 	"github.com/go-martini/martini"
@@ -299,6 +301,13 @@ type write struct {
 	ops ot.Ops
 }
 
+func (s *Server) defaultAssetPath() string {
+	p, err := build.Default.Import("github.com/mstone/focus", "", build.FindOnly)
+	if err != nil {
+		return "."
+	}
+	return path.Join(p.Dir, "templates")
+}
 func (s *Server) configure() error {
 	m := martini.Classic()
 
@@ -307,7 +316,9 @@ func (s *Server) configure() error {
 		WriteBufferSize: 1024,
 	}
 
-	m.Use(render.Renderer())
+	m.Use(render.Renderer(render.Options{
+		Directory: s.defaultAssetPath(),
+	}))
 
 	m.Get("/ws", func(w http.ResponseWriter, r *http.Request) {
 		ws, err := upgrader.Upgrade(w, r, nil)

@@ -1,13 +1,15 @@
 package server
 
 import (
-	"github.com/gorilla/websocket"
-	"time"
-	// "flag"
+	"flag"
+	"io/ioutil"
+	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/golang/glog"
+	"github.com/gorilla/websocket"
 )
 
 func newTestServer(t *testing.T) (*httptest.Server, *Server) {
@@ -32,6 +34,20 @@ func newTestServer(t *testing.T) (*httptest.Server, *Server) {
 	return httpSrv, focusSrv
 }
 
+func TestGetPad(t *testing.T) {
+	httpSrv, _ := newTestServer(t)
+
+	resp, err := http.Get(httpSrv.URL)
+	if err != nil {
+		t.Errorf("unable to GET /; err: %q", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		body, _ := ioutil.ReadAll(resp.Body)
+		t.Errorf("GET / did not return 200, resp: %#v, body: %s", resp, string(body))
+	}
+}
+
 func TestServer(t *testing.T) {
 	_, focusSrv := newTestServer(t)
 
@@ -45,7 +61,7 @@ func TestServer(t *testing.T) {
 }
 
 func init() {
-	// flag.Parse()
+	flag.Parse()
 
 	defer glog.Flush()
 
