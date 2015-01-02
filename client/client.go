@@ -16,6 +16,7 @@ import (
 )
 
 func main() {
+	var aceDiv js.Object
 	var aceObj js.Object
 	var adapter ace.Adapter
 	var state ot.State
@@ -25,6 +26,7 @@ func main() {
 	var session js.Object
 
 	// configure ACE + attach adapter
+	aceDiv = js.Global.Get("document").Call("getElementById", "editor")
 	aceObj = js.Global.Get("ace")
 	editor = aceObj.Call("edit", "editor")
 	editor.Call("setTheme", "ace/theme/chrome")
@@ -49,7 +51,7 @@ func main() {
 		state = &ot.Synchronized{}
 		jsOps, _ := json.Marshal(msg.Msg{
 			Cmd:  msg.C_OPEN,
-			Name: "index.txt",
+			Name: aceDiv.Get("dataset").Get("vppName").Str(),
 		})
 		conn.Call("send", jsOps)
 	})

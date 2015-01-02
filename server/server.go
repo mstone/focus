@@ -263,21 +263,13 @@ type write struct {
 func (s *Server) Run() error {
 	m := martini.Classic()
 
-	m.Use(render.Renderer(render.Options{
-		Delims: render.Delims{
-			Left:  "((",
-			Right: "))",
-		},
-	}))
-
-	m.Get("/", func(x render.Render) {
-		x.HTML(200, "root", nil)
-	})
-
 	upgrader := websocket.Upgrader{
 		ReadBufferSize:  1024,
 		WriteBufferSize: 1024,
 	}
+
+	m.Use(render.Renderer())
+
 	m.Get("/ws", func(w http.ResponseWriter, r *http.Request) {
 		ws, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
@@ -322,6 +314,10 @@ func (s *Server) Run() error {
 		}
 
 		glog.Infof("conn %p: exiting", c)
+	})
+
+	m.Get("/**", func(x render.Render, r *http.Request) {
+		x.HTML(200, "root", r.URL.Path)
 	})
 
 	m.Run()
