@@ -2,23 +2,21 @@
 <html>
 <head>
 	<title>Focus</title>
-	<script src="//ajax.googleapis.com/ajax/libs/angularjs/1.2.15/angular.min.js"></script>
     <script src="/ace-builds/src-noconflict/ace.js" type="text/javascript" charset="utf-8"></script>
-	<script src="/client.js"></script>
 	<style>
 	    #editor {
-        position: relative;
-        width: 500px;
-        height: 400px;
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 90%;
         border: 1px solid black;
+        margin: 1em;
+        padding: 1em;
 	    }
 	</style>
 </head>
-<body ng-app="root">
-	<div ng-controller="index">
-		<div id="replica">
-		    <div id="editor"></div>
-		</div>
-	</div>
+<body>
+    <div id="editor"></div>
+	<script src="/client.js"></script>
 </body>
 </html>

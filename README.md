@@ -26,17 +26,12 @@ focus:
       * [golang/glog](https://github.com/golang/glog),
       * [mattn/go-sqlite3](https://github.com/mattn/go-sqlite3),
       * [gopherjs](https://github.com/gopherjs/gopherjs),
-      * [go-angularjs](https://github.com/gopherjs/go-angularjs),
       * [martini](https://github.com/go-martini/martini),
       * [martini-contrib/binding](https://github.com/martini-contrib/binding),
       * [martini-contrib/render](https://github.com/martini-contrib/render),
       * [gorilla/websocket](https://github.com/gorilla/websocket)
       * [codegangsta/inject](https://github.com/codegangsta/inject)
       * [phaikawl/options](https://github.com/phaikawl/options)
-
-  * run-depends on
-
-      * [AngularJS](https://angularjs.org), and
 
   * bundles:
 

@@ -7,8 +7,6 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
-	ng "github.com/gopherjs/go-angularjs"
 	"github.com/gopherjs/gopherjs/js"
 	"github.com/mstone/focus/msg"
 
@@ -26,71 +24,56 @@ func main() {
 	var editor js.Object
 	var session js.Object
 
-	// configure Angular
-	app := ng.NewModule("root", nil)
-	app.NewController("index", func(scope *ng.Scope, interval *ng.Interval, http *ng.HttpService) {
+	// configure ACE + attach adapter
+	aceObj = js.Global.Get("ace")
+	editor = aceObj.Call("edit", "editor")
+	editor.Call("setTheme", "ace/theme/chrome")
 
-		// configure ACE + attach adapter
-		ng.ElementById("editor").Call("ready", func() {
-			aceObj = js.Global.Get("ace")
-			editor = aceObj.Call("edit", "editor")
-			editor.Call("setTheme", "ace/theme/chrome")
+	session = editor.Call("getSession")
+	session.Call("setMode", "ace/mode/markdown")
 
-			session = editor.Call("getSession")
-			session.Call("setMode", "ace/mode/markdown")
+	keys := map[string]interface{}{}
+	keys["ctrl-t"] = nil
+	editor.Get("commands").Call("bindKeys", keys)
 
-			keys := map[string]interface{}{}
-			keys["ctrl-t"] = nil
-			editor.Get("commands").Call("bindKeys", keys)
+	doc = editor.Call("getSession").Call("getDocument")
+	doc.Call("setNewLineMode", "unix")
 
-			doc = editor.Call("getSession").Call("getDocument")
-			doc.Call("setNewLineMode", "unix")
+	adapter.AttachEditor(session, doc)
 
-			adapter.AttachEditor(session, doc)
-		})
-
-		// configure socket
-		conn = js.Global.Get("WebSocket").New("ws://localhost:3000/ws")
-		conn.Set("onclose", func(e js.Object) {
-			alert.String("WEBSOCKET CLOSED")
-		})
-		conn.Set("onopen", func(e js.Object) {
-			alert.String("WEBSOCKET OPEN")
-			state = &ot.Synchronized{}
-			jsOps, _ := json.Marshal(msg.Msg{
-				Cmd:  msg.C_OPEN,
-				Name: "index.txt",
-			})
-			alert.Golang(fmt.Sprintf("opening doc: %s", jsOps))
-			conn.Call("send", jsOps)
-		})
-		conn.Set("onmessage", func(e js.Object) {
-			alert.String("WEBSOCKET GOT MSG: " + e.Get("data").Str())
-			//obj := js.Global.Get("JSON").Call("parse", e.Get("data"))
-			m := msg.Msg{}
-
-			err := json.Unmarshal([]byte(e.Get("data").Str()), &m)
-			if err != nil {
-				alert.Golang(err)
-				panic(err.Error())
-			}
-
-			switch m.Cmd {
-			default:
-				alert.Golang(m)
-				panic("unknown message")
-			case msg.C_OPEN_RESP:
-				alert.String("open resp!")
-				adapter.AttachFd(m.Fd)
-			case msg.C_WRITE_RESP:
-				alert.String("ack!")
-				state = state.Ack(&adapter, m.Rev)
-			case msg.C_WRITE:
-				alert.String("write!")
-				state = state.Server(&adapter, m.Rev, m.Ops)
-			}
-		})
-
-		adapter.AttachSocket(&state, conn)
+	// configure socket
+	conn = js.Global.Get("WebSocket").New("ws://localhost:3000/ws")
+	conn.Set("onclose", func(e js.Object) {
 	})
+	conn.Set("onopen", func(e js.Object) {
+		state = &ot.Synchronized{}
+		jsOps, _ := json.Marshal(msg.Msg{
+			Cmd:  msg.C_OPEN,
+			Name: "index.txt",
+		})
+		conn.Call("send", jsOps)
+	})
+	conn.Set("onmessage", func(e js.Object) {
+		m := msg.Msg{}
+
+		err := json.Unmarshal([]byte(e.Get("data").Str()), &m)
+		if err != nil {
+			alert.Golang(err)
+			panic(err.Error())
+		}
+
+		switch m.Cmd {
+		default:
+			alert.Golang(m)
+			panic("unknown message")
+		case msg.C_OPEN_RESP:
+			adapter.AttachFd(m.Fd)
+		case msg.C_WRITE_RESP:
+			state = state.Ack(&adapter, m.Rev)
+		case msg.C_WRITE:
+			state = state.Server(&adapter, m.Rev, m.Ops)
+		}
+	})
+
+	adapter.AttachSocket(&state, conn)
 }
