@@ -146,27 +146,27 @@ func (s *Server) transformOps(c *conn, fd int, rev int, ops ot.Ops) {
 	doc.mu.Lock()
 	defer doc.mu.Unlock()
 
+	// extract concurrent ops
 	pops := []ot.Ops{}
 	if rev < len(doc.hist) {
 		pops = doc.hist[rev:]
 	}
 	glog.Infof("conn: %p, desc: %p, doc: %p, found %d concurrent ops-lists", c, d, doc, len(pops))
 
-	concurrent := ot.Ops{}
+	// transform input ops
+	tops := ops
 	for _, pop := range pops {
-		concurrent = append(concurrent, pop...)
+		topsPrev := tops
+		tops, _ = ot.Transform(tops, pop)
+		glog.Infof("transform:\n\tops: %s -> ops2: %s\n\tcon: %s", topsPrev.String(), tops.String(), pop.String())
 	}
-
-	// transform ops
-	ops2, concurrent2 := ot.Transform(ops, concurrent)
-	glog.Infof("transform:\n\tops: %s -> ops2: %s\n\tcon: %s -> con2: %s", ops.String(), ops2.String(), concurrent.String(), concurrent2.String())
 
 	hist := doc.hist
 	comp := doc.comp
-	hist2 := append(doc.hist, ops2)
-	comp2 := ot.Compose(doc.comp, ops2)
+	hist2 := append(doc.hist, tops)
+	comp2 := ot.Compose(doc.comp, tops)
 
-	glog.Infof("doc:\n\thist : %s\n\thist2: %s\n\tcomp : %s\n\tops2 : %s\n\tcomp2: %s", hist, hist2, comp, ops2, comp2)
+	glog.Infof("doc:\n\thist : %s\n\thist2: %s\n\tcomp : %s\n\tops  : %s\n\ttops : %s\n\tcomp2: %s", hist, hist2, comp, ops, tops, comp2)
 	doc.hist = hist2
 	doc.comp = comp2
 	rev = len(doc.hist)
@@ -180,7 +180,7 @@ func (s *Server) transformOps(c *conn, fd int, rev int, ops ot.Ops) {
 			pdesc.conn.mu.Lock()
 			defer pdesc.conn.mu.Unlock()
 
-			pdesc.conn.msgs <- write{fd, rev, ops2}
+			pdesc.conn.msgs <- write{fd, rev, tops}
 		}
 	}
 
