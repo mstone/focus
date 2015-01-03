@@ -133,6 +133,7 @@ type client struct {
 	ws   *websocket.Conn
 	rev  int
 	doc  *ot.Doc
+	st   ot.State
 }
 
 func (c *client) sendRandomOps() {
@@ -178,7 +179,10 @@ func (c *client) sendRandomOps() {
 	glog.Infof("client: %p, sending random ops: %s", c, ops.String())
 
 	c.doc.Apply(ops)
+	c.st = c.st.Client(c, ops)
+}
 
+func (c *client) Send(ops ot.Ops) {
 	//c.ws.SetWriteDeadline(time.Now().Add(100 * time.Millisecond))
 	err := c.ws.WriteJSON(msg.Msg{
 		Cmd: msg.C_WRITE,
@@ -191,23 +195,30 @@ func (c *client) sendRandomOps() {
 	}
 }
 
+func (c *client) Recv(rev int, ops ot.Ops) {
+	glog.Infof("client: %p, fd: %d, doc: %#v, ops: %s", c, c.fd, c.doc, ops)
+	pdoc := c.doc.String()
+	c.doc.Apply(ops)
+	ndoc := c.doc.String()
+	glog.Infof("client: %p, fd: %d:\n\tpdoc: %q\n\tndoc: %q", c, c.fd, pdoc, ndoc)
+}
+
+func (c *client) Ack(rev int) {
+	c.rev = rev
+}
+
 func (c *client) onWriteResp(m msg.Msg) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	c.rev = m.Rev
+	c.st = c.st.Ack(c, m.Rev)
 }
 
 func (c *client) onWrite(m msg.Msg) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	c.rev = m.Rev
-	glog.Infof("client: %p, fd: %d, doc: %#v, ops: %s", c, c.fd, c.doc, m.Ops)
-	pdoc := c.doc.String()
-	c.doc.Apply(m.Ops)
-	ndoc := c.doc.String()
-	glog.Infof("client: %p, fd: %d:\n\tpdoc: %q\n\tndoc: %q", c, c.fd, pdoc, ndoc)
+	c.st = c.st.Server(c, m.Rev, m.Ops)
 }
 
 func (c *client) writeLoop() {
@@ -300,6 +311,7 @@ func TestRandom(t *testing.T) {
 			ws:   conn,
 			rev:  0,
 			doc:  ot.NewDoc(),
+			st:   &ot.Synchronized{},
 		}
 		clients[idx] = c
 
