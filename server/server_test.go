@@ -5,6 +5,7 @@ import (
 	"github.com/google/gofuzz"
 	"github.com/mstone/focus/msg"
 	"github.com/mstone/focus/ot"
+	"go/build"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -17,10 +18,17 @@ import (
 )
 
 func newTestServer(t *testing.T) (*httptest.Server, *Server) {
-	focusConf := Config{
-		Store: nil,
-		API:   "",
+	pkg, err := build.Import("github.com/mstone/focus", "", build.FindOnly)
+	if err != nil {
+		t.Errorf("unable to locate server assets, err: %q", err)
 	}
+
+	focusConf := Config{
+		Store:  nil,
+		API:    "",
+		Assets: pkg.Dir,
+	}
+	glog.Infof("found assets path: %q", focusConf.Assets)
 
 	focusSrv, err := New(focusConf)
 	if err != nil {
