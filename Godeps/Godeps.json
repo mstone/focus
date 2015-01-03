@@ -20,6 +20,10 @@
 			"Rev": "d1c4472bf2efd3826f2b5bdcc02d8416798d678c"
 		},
 		{
+			"ImportPath": "github.com/google/gofuzz",
+			"Rev": "e8e0831aa6b604dddd40ce04119e027d1e3ac33a"
+		},
+		{
 			"ImportPath": "github.com/gopherjs/gopherjs/js",
 			"Comment": "ZZZ-130-g61c1239",
 			"Rev": "61c1239f50c65aabdb00ad1a82cf493ea3272823"

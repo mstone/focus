@@ -21,17 +21,18 @@ focus:
       * [Golang](http://golang.org),
       * [sqlite3](http://sqlite.org),
 
-    and several MIT- and Apache 2.0-licensed Golang libraries including
+    and several MIT-, 3BSD- and Apache 2.0-licensed Golang libraries including
 
       * [golang/glog](https://github.com/golang/glog),
       * [mattn/go-sqlite3](https://github.com/mattn/go-sqlite3),
-      * [gopherjs](https://github.com/gopherjs/gopherjs),
+      * [gopherjs](https://github.com/gopherjs/gopherjs) (now forked for go1.3 compatibility: [mstone/gopherjs](https://github.com/mstone/gopherjs)),
       * [martini](https://github.com/go-martini/martini),
       * [martini-contrib/binding](https://github.com/martini-contrib/binding),
       * [martini-contrib/render](https://github.com/martini-contrib/render),
       * [gorilla/websocket](https://github.com/gorilla/websocket)
       * [codegangsta/inject](https://github.com/codegangsta/inject)
-      * [phaikawl/options](https://github.com/phaikawl/options)
+      * [gofuzz](https://github.com/google/gofuzz)
+      * [bpool](https://github.com/oxtoacart/bpool)
 
   * bundles:
 
@@ -92,7 +93,7 @@ our versions of the relevant build-deps:
     go get -u github.com/tools/godep
     ```
 
-Next, some fairly specific known-good versions of gopherjs, such as this one:
+4. which we use to build gopherjs, as in:
 
     ```bash
     go get -d github.com/mstone/gopherjs
@@ -102,7 +103,7 @@ Next, some fairly specific known-good versions of gopherjs, such as this one:
     godep go install
     ```
 
-4. finally, focus uses some existing javascript libraries like
+5. finally, focus uses some existing javascript libraries like
 [ACE](http://ace.c9.io), which we currently include via a [git
 submodule](http://git-scm.com/docs/git-submodule), which [go
 get](http://golang.org/cmd/go/#hdr-Download_and_install_packages_and_dependencies)
