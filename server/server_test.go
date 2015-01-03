@@ -95,6 +95,22 @@ func TestAPI(t *testing.T) {
 	fd := m.Fd
 	glog.Infof("OPEN_RESP for %s yielded fd %d", vpName, fd)
 
+	// read initial write
+	m = msg.Msg{}
+	conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
+	err = conn.ReadJSON(&m)
+	if err != nil {
+		t.Errorf("unable to read initial WRITE, err: %q", err)
+	}
+
+	if m.Cmd != msg.C_WRITE {
+		t.Error("did not get a WRITE; msg: %+v", m)
+	}
+
+	if m.Fd != fd {
+		t.Errorf("server sent WRITE for a different vaporpad: fd %d vs %+v", fd, m)
+	}
+
 	glog.Infof("sending empty ops for %s/%d", vpName, fd)
 	// send empty ops
 	conn.SetWriteDeadline(time.Now().Add(100 * time.Millisecond))
@@ -248,8 +264,8 @@ func (c *client) readLoop() {
 	}
 }
 
-const numClients = 2
-const numRounds = 1
+const numClients = 4
+const numRounds = 4
 
 func TestRandom(t *testing.T) {
 	_, focusSrv := newTestServer(t)
