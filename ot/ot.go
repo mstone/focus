@@ -359,6 +359,16 @@ Fix:
 	return aos, bos
 }
 
+func Normalize(os Ops) Ops {
+	os2 := Ops{}
+	for _, o := range os {
+		if o.Len() != 0 {
+			os2 = append(os2, o)
+		}
+	}
+	return os2
+}
+
 type Doc struct {
 	// Current text
 	body []rune
@@ -383,6 +393,9 @@ func (d *Doc) String() string {
 }
 
 func (d *Doc) Apply(os Ops) {
+	if len(os) == 0 {
+		return
+	}
 	pos := 0
 	parts := [][]rune{}
 	for _, o := range os {

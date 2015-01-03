@@ -8,6 +8,7 @@ import (
 	"go/build"
 	"net/http"
 	"path"
+	"reflect"
 	"sync"
 
 	"github.com/go-martini/martini"
@@ -147,40 +148,58 @@ func (s *Server) transformOps(c *conn, fd int, rev int, ops ot.Ops) {
 	defer doc.mu.Unlock()
 
 	// extract concurrent ops
-	pops := []ot.Ops{}
+	cops := []ot.Ops{}
 	if rev < len(doc.hist) {
-		pops = doc.hist[rev:]
+		cops = doc.hist[rev:]
 	}
-	glog.Infof("conn: %p, desc: %p, doc: %p, found %d concurrent ops-lists", c, d, doc, len(pops))
+	glog.Infof("conn: %p, desc: %p, doc: %p, found %d concurrent ops-lists", c, d, doc, len(cops))
 
 	// transform input ops
-	tops := ops
-	for _, pop := range pops {
-		topsPrev := tops
-		tops, _ = ot.Transform(tops, pop)
-		glog.Infof("transform:\n\tops: %s -> ops2: %s\n\tcon: %s", topsPrev.String(), tops.String(), pop.String())
+	// tops := ops
+	// for _, pop := range pops {
+	// 	topsPrev := tops
+	// 	//tops, _ = ot.Transform(tops, pop)
+	// 	tops, _ = ot.Transform(tops, pop)
+	// 	glog.Infof("transform:\n\tops: %s -> ops2: %s\n\tcon: %s", topsPrev.String(), tops.String(), pop.String())
+	// }
+
+	cops2 := ot.Ops{}
+	for _, cop := range cops {
+		cops2 = ot.Compose(cops2, cop)
 	}
+	tops, _ := ot.Transform(ops, cops2)
+
+	tops2 := ops
+	for _, cop := range cops {
+		tops2, _ = ot.Transform(tops2, cop)
+	}
+	glog.Infof("xfrm:\n\tcops : %s\n\tcops2: %s\n\ttops : %s\n\ttops2: %s", cops, cops2, tops, tops2)
 
 	hist := doc.hist
 	comp := doc.comp
 	hist2 := append(doc.hist, tops)
 	comp2 := ot.Compose(doc.comp, tops)
+	comp3 := ot.Compose(doc.comp, tops2)
 
-	glog.Infof("doc:\n\thist : %s\n\thist2: %s\n\tcomp : %s\n\tops  : %s\n\ttops : %s\n\tcomp2: %s", hist, hist2, comp, ops, tops, comp2)
+	if !reflect.DeepEqual(ot.Normalize(comp2), ot.Normalize(comp3)) {
+		glog.Errorf("compose <> transform!")
+	}
+
+	glog.Infof("doc:\n\thist : %s\n\thist2: %s\n\tcomp : %s\n\tops  : %s\n\ttops : %s\n\tcomp2: %s\n\tcomp3: %s", hist, hist2, comp, ops, tops, comp2, comp3)
 	doc.hist = hist2
 	doc.comp = comp2
 	rev = len(doc.hist)
 
-	glog.Infof("conn: %p, enqueueing", c)
-
 	send := func(pdesc *desc) {
 		if pdesc == d {
-			pdesc.conn.msgs <- writeresp{fd, rev}
+			glog.Infof("conn: %p, pconn: %p, enqueueing %#v", c, pdesc.conn, writeresp{pdesc.no, rev})
+			pdesc.conn.msgs <- writeresp{pdesc.no, rev}
 		} else {
 			pdesc.conn.mu.Lock()
 			defer pdesc.conn.mu.Unlock()
 
-			pdesc.conn.msgs <- write{fd, rev, tops}
+			glog.Infof("conn: %p, pconn: %p, enqueueing server.write{fd: %d, rev: %d, ops: %s}", c, pdesc.conn, pdesc.no, rev, tops)
+			pdesc.conn.msgs <- write{pdesc.no, rev, tops}
 		}
 	}
 
@@ -225,13 +244,13 @@ func (s *Server) openDoc(c *conn, name string) {
 		fd:   fd.no,
 	}
 
-	if len(d.hist) > 0 {
-		c.msgs <- write{
-			fd:  fd.no,
-			rev: len(d.hist),
-			ops: d.comp,
-		}
+	// if len(d.hist) > 0 {
+	c.msgs <- write{
+		fd:  fd.no,
+		rev: len(d.hist),
+		ops: d.comp,
 	}
+	// }
 }
 
 func (s *Server) readConn(c *conn) {
@@ -250,13 +269,13 @@ func (s *Server) readConn(c *conn) {
 			s.closeConn(c)
 			return
 		case msg.C_OPEN:
-			glog.Infof("conn: %p, opening doc %q", c, m.Name)
+			glog.Infof("conn: %p, got OPEN, name: %q", c, m.Name)
 			s.openDoc(c, m.Name)
-			glog.Infof("conn: %p, done opening", c)
+			glog.Infof("conn: %p, done opening name: %q", c, m.Name)
 		case msg.C_WRITE:
-			glog.Infof("conn: %p, read acks: %d, ops: %s", c, m.Rev, m.Ops)
+			glog.Infof("conn: %p, got WRITE fd: %d, rev: %d, ops: %s", c, m.Fd, m.Rev, m.Ops)
 			s.transformOps(c, m.Fd, m.Rev, m.Ops)
-			glog.Infof("conn: %p, done enqueueing", c)
+			glog.Infof("conn: %p, done with WRITE fd: %d, rev: %d, ops: %s", c, m.Fd, m.Rev, m.Ops)
 		}
 	}
 }
@@ -278,6 +297,7 @@ func (s *Server) writeConn(c *conn) {
 				Rev: v.rev,
 			})
 		case write:
+			glog.Infof("conn: %p:\n\twriting fd: %d, rev: %d, ops: %s", c, v.fd, v.rev, v.ops)
 			c.ws.WriteJSON(msg.Msg{
 				Cmd: msg.C_WRITE,
 				Fd:  v.fd,
