@@ -5,7 +5,6 @@
 package server
 
 import (
-	"go/build"
 	"net/http"
 	"path"
 	"reflect"
@@ -22,8 +21,9 @@ import (
 )
 
 type Config struct {
-	API   string
-	Store *store.Store
+	API    string
+	Assets string
+	Store  *store.Store
 }
 
 // struct conn represents an open WebSocket connection.
@@ -50,27 +50,29 @@ type doc struct {
 }
 
 type Server struct {
-	m     *martini.ClassicMartini
-	mu    sync.Mutex
-	store *store.Store
-	api   string
-	conns map[*conn]struct{}
-	descs map[*desc]struct{}
-	docs  map[*doc]struct{}
-	names map[string]*doc
-	next  int
+	m      *martini.ClassicMartini
+	mu     sync.Mutex
+	store  *store.Store
+	api    string
+	assets string
+	conns  map[*conn]struct{}
+	descs  map[*desc]struct{}
+	docs   map[*doc]struct{}
+	names  map[string]*doc
+	next   int
 }
 
 func New(c Config) (*Server, error) {
 	s := &Server{
-		mu:    sync.Mutex{},
-		store: c.Store,
-		api:   c.API,
-		conns: map[*conn]struct{}{},
-		descs: map[*desc]struct{}{},
-		docs:  map[*doc]struct{}{},
-		names: map[string]*doc{},
-		next:  1,
+		mu:     sync.Mutex{},
+		store:  c.Store,
+		api:    c.API,
+		assets: c.Assets,
+		conns:  map[*conn]struct{}{},
+		descs:  map[*desc]struct{}{},
+		docs:   map[*doc]struct{}{},
+		names:  map[string]*doc{},
+		next:   1,
 	}
 
 	err := s.configure()
@@ -326,13 +328,6 @@ type write struct {
 	ops ot.Ops
 }
 
-func (s *Server) defaultAssetPath() string {
-	p, err := build.Default.Import("github.com/mstone/focus", "", build.FindOnly)
-	if err != nil {
-		return "."
-	}
-	return path.Join(p.Dir, "templates")
-}
 func (s *Server) configure() error {
 	m := martini.Classic()
 
@@ -341,8 +336,10 @@ func (s *Server) configure() error {
 		WriteBufferSize: 1024,
 	}
 
+	m.Use(martini.Static(path.Join(s.assets, "public")))
+
 	m.Use(render.Renderer(render.Options{
-		Directory: s.defaultAssetPath(),
+		Directory: path.Join(s.assets, "templates"),
 	}))
 
 	m.Get("/ws", func(w http.ResponseWriter, r *http.Request) {

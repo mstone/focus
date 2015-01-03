@@ -7,6 +7,7 @@ package main
 import (
 	"database/sql"
 	"flag"
+	"go/build"
 	"net/http"
 	"net/url"
 	"runtime"
@@ -22,6 +23,15 @@ import (
 var driver = flag.String("driver", "sqlite3", "database/sql driver")
 var dsn = flag.String("dsn", ":memory:", "database/sql dsn")
 var api = flag.String("api", "ws://localhost:3000/ws", "API endpoint")
+var assets = flag.String("assets", defaultAssetPath(), "assets directory")
+
+func defaultAssetPath() string {
+	p, err := build.Default.Import("github.com/mstone/focus", "", build.FindOnly)
+	if err != nil {
+		return "."
+	}
+	return p.Dir
+}
 
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
@@ -54,8 +64,9 @@ func main() {
 	}
 
 	serverCfg := server.Config{
-		Store: store,
-		API:   *api,
+		Store:  store,
+		API:    *api,
+		Assets: *assets,
 	}
 
 	server, err := server.New(serverCfg)
