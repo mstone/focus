@@ -93,19 +93,23 @@ Vaporpad is intended to work for distributors, operators, integrators, editors, 
 
 [[A-1]]
 .A-1: Latency
-Vaporpad takes more than 1 second to respond to a request.
+Focus takes more than 1 second to respond to a request.
 
 [[A-2]]
 .A-2: Durability
-Vaporpad loses history.
+Focus loses history.
 
 [[A-3]]
 .A-3: Availability
-Vaporpad gets DoSed.
+Focus gets DoSed.
 
 [[A-4]]
 .A-4: Confusion
-Vaporpad garbles a pad.
+Focus garbles a vaporpad.
+
+[[A-5]]
+.A-5: Reputation
+Focus comes to be seen as not fast, reliable, easy, or secure.
 
 === System Limitations
 
@@ -155,11 +159,11 @@ As a distributor, I want Vaporpad to be https://www.debian.org/social_contract=g
 
 [[N-D-2]]
 .N-D-2: Maintainability
-As a distributor, I want Vaporpad to be easy to package.
+As a distributor, I want Vaporpad to be easy to package. ↑<<A-5>>
 
 [[N-D-3]]
 .N-D-3: Upstream Support
-As a distributor, I want Vaporpad to be maintained.
+As a distributor, I want Vaporpad to be maintained. ↑<<A-5>>
 
 [[N-D-4]]
 .N-D-4: Upstream Availability
@@ -211,11 +215,19 @@ As an operator, I want to be able to communicate site status {amp} maintenance s
 .N-O-10: SSO Integration
 As an operator, I want it to be easy to integrate vaporpad with my site's Single Signon service.
 
+[[N-O-11]]
+.N-O-11: Operator Assurance
+As an operator, I want assurance that vaporpad is safe to use. ↑<<A-5>>
+
 === Integrators
 
 [[N-I-1]]
-.N-I-1: Foo
+.N-I-1: Capex
 As a third-party integrator, I want it to be easy to replace my site's text fields with vaporpads.
+
+[[N-I-2]]
+.N-I-2: Integrator Assurance
+As a third-party integrator, I want assurance that vaporpad is safe to use. ↑<<A-5>>
 
 === Editors
 
@@ -255,22 +267,38 @@ As an editor, I want to be able to cut-copy-paste. ⏚
 .N-E-9: Monospace
 As an editor, I want to be able to use a monospace font. ⏚
 
+[[N-E-10]]
+.N-E-10: Editor Assurance
+As an editor, I want assurance that vaporpad is safe to use. ↑<<A-5>>
+
 === Viewers
 
+[[N-V-1]]
+.N-V-1: History
 As a viewer, I want to be able to see, browse, and search vaporpad history?
 
 === Researchers
 
+[[N-R-1]]
+.N-R-1: Measurement
 As a researcher, I want to be measure how people use vaporpad?
 
 === Contributors
 
+[[N-C-1]]
+.N-C-1: Contact Info
 As a contributor, I want to know how to contact a Focus maintainer.
 
+[[N-C-2]]
+.N-C-2: Expectations
 As a contributor, I want to know what to expect my contribution experience to be like.
 
+[[N-C-3]]
+.N-C-3: Testing
 As a contributor, I want it to be easy to test my contributions before submitting them.
 
+[[N-C-4]]
+.N-C-4: Risk Allocation
 As a contributor, I don't want to have to sign anything to contribute.
 
 
@@ -317,11 +345,11 @@ As a contributor, I don't want to have to sign anything to contribute.
 
 [[PR-1]]
 .PR-1: Client-Server Architecture
-Vaporpad will use a client-server architecture.
+Vaporpad will use a client-server architecture. ↑[<<N-O-11>>, <<N-I-2>>]
 
 [[PR-2]]
 .PR-2: Reference Code + Protocol
-Vaporpad includes reference client code, reference server code, and a documented protocol spoken between them.
+Vaporpad includes reference client code, reference server code, and a documented protocol spoken between them. ↑[<<N-I-2>>]
 
 [[PR-3]]
 .PR-3: Operational Transformation Theory
@@ -329,11 +357,11 @@ Vaporpad shall be based on the theory of operational transformation.
 
 [[PR-4]]
 .PR-4: Memory-Safe Language
-Vaporpad shall be written in a memory-safe language.
+Vaporpad shall be written in a memory-safe language. ↑[<<N-O-11>>, <<N-I-2>>]
 
 [[PR-5]]
 .PR-5: Certified Algorithms
-Where easy, core Vaporpad algorithms (or their cousins) shall be certified correct w.r.t. this specification.
+Where easy, core Vaporpad algorithms (or their cousins) shall be certified correct w.r.t. this specification. ↑<<N-I-2>>
 
 [[PR-6]]
 .PR-6: Protocol Purpose
@@ -343,7 +371,7 @@ The point of the Vaporpad Protocol (VPP) is to communicate document edits betwee
 
 [[E-C-1]]
 .E-C-1: Client Environment
-The Focus reference client code will run in Firefox 34, Safari 8, Chrome 39, and iOS Safari 8.1. ↑<<T-1>>
+The Focus reference client code will run in Firefox 34, Safari 8, Chrome 39, and iOS Safari 8.1. ↑[<<T-1>>, <<N-E-1>>]
 
 === Server Environment
 
@@ -357,18 +385,18 @@ The server host environment may have any combination of a process supervisor, a 
                Editor                               Operator
                  |                                     |
                  |                                     |
-        Focus Client                                   |
+            Focus Client                               |
        /---------------------\                         |
        |  conns     widgets  |                         |
-       |  sessions           |                         |
-       |  mux       docs     |                         |
+       |  fds                |                         |
+       |  revs      ot state |                         |
        \---------------------/                         |
                  |                                     |
                  |                                     |
-        Browser  |                             Focus Daemon
+              Browser                             Focus Server
        /---------------------\                /-----------------\
        | DOM      WebSockets |                | conns     docs  |
-       | JS       Editor Lib |                |       mux       |
+       | JS       Editor Lib |                |      descs      |
        \---------------------/                \-----------------/
                  |                                     |
                  |                                     |
@@ -380,37 +408,41 @@ The server host environment may have any combination of a process supervisor, a 
 
 [[CL-1]]
 .CL-1: Vaporfield Setup
-To operate, each Vaporfield must be connected to a VPP Client with an active session.
+To operate, each Vaporfield must be connected to a VPP Client with an active conn. →<<SRV-2>>
 
 [[CL-2]]
 .CL-2: VPP Client Setup
-To have an active session, a VPP Client must be connected to a VPP Service by way of a VPP Service Locator.
+To have an active conn, a VPP Client must be connected to a VPP Service by way of a VPP Service Locator. →[<<CL-3>>, <<CL-3.1>>, <<VPP-1>>]
 
 [[CL-3]]
 .CL-3: VPP Service Locators
-VPP Service Locators are URLs.
+VPP Service Locators are URLs. →<<CL-3.1>>
+
+[[CL-3.1]]
+.CL-3.1: WebSockets
+Initially, VPP Service Locators will be URLs with a https://tools.ietf.org/html/rfc6455[WebSocket] +ws://+ or +wss://+ scheme. →<<VPP-1>>
 
 [[CL-4]]
 .CL-4: Vaporfield Operation
-Once connected, vaporfields use VPP to synchronize their state.
+Once connected, vaporfields will send and receive VPP operations to synchronize their state. ↑<<PR-3>>
 
 [[CL-5]]
 .CL-5: Authentication
-VPP clients will authenticate with http://tools.ietf.org/html/rfc4422[SASL], possibly including with http://tools.ietf.org/html/rfc4422#appendix-A[SASL EXTERNAL] for cookie or TLS-client-cert-based web client authentication.
+VPP clients will authenticate with http://tools.ietf.org/html/rfc4422[SASL], possibly including with http://tools.ietf.org/html/rfc4422#appendix-A[SASL EXTERNAL] for cookie or TLS-client-cert-based web client authentication. ↑[<<N-O-3>>, <<N-O-10>>, <<N-O-11>>]
 
 [[CL-6]]
 .CL-6: Multiplexing
-For now, there is no need to multiplex/route VPP connections over a limited number of underlying transports.
+Clients may need to multiplex/route VPP operations over a limited number of underlying transports. →<<SRV-2>>
 
 === Server Logic
 
 [[SRV-1]]
-.SRV-1: Multiple Vaporpads
-The Focus server needs to support concurrent editing of multiple vaporpads. ↑<<N-E-2>>
+.SRV-1: Concurrency
+The Focus server needs to support concurrent editing of multiple vaporpads by multiple clients. ↑<<N-E-2>>
 
 [[SRV-2]]
-.SRV-2: File System Metaphor
-The Focus server will use a network/file system metaphor -- connections, file descriptions, and documents -- to route edits.
+.SRV-2: Network File System Metaphor
+The Focus server will use a "network file system" metaphor, consisting of "conns", "descs", and "docs" -- to route edits. ←<<CL-6>>
 
 === Protocol Logic
 
@@ -425,6 +457,26 @@ VPP relies on its underlying transport for ordering, framing, reliability, integ
 
 
 
+
+
+
+== Problems
+
+[[PRB-1]]
+.PRB-1: Locking
+The focus server must tolerate concurrency without crashing. ↑[<<SRV-1>>, <<A-1>>, <<A-2>>, <<A-3>>]
+
+[[PRB-2]]
+.PRB-2: Buffering
+The focus server must tolerate fast writers and slow readers. ↑[<<SRV-1>>, <<A-1>>, <<A-2>>, <<A-3>>]
+
+[[PRB-3]]
+.PRB-3: DoS
+The focus server must tolerate load spikes. ↑[<<N-O-11>>, <<N-I-2>>]
+
+[[PRB-4]]
+.PRB-4: Coverage
+The focus server's test suite must achieve high test coverage. ↑[<<N-C-3>>, <<N-O-11>>, <<N-I-2>>, <<N-E-10>>]
 
 
 
