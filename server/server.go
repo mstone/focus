@@ -5,15 +5,17 @@
 package server
 
 import (
+	"github.com/unrolled/render"
 	"net/http"
 	"path"
 	"reflect"
+	"runtime/debug"
 	"sync"
 
-	"github.com/go-martini/martini"
-	"github.com/golang/glog"
+	log "gopkg.in/inconshreveable/log15.v2"
+
+	"github.com/codegangsta/negroni"
 	"github.com/gorilla/websocket"
-	"github.com/martini-contrib/render"
 
 	"github.com/mstone/focus/msg"
 	"github.com/mstone/focus/ot"
@@ -50,7 +52,7 @@ type doc struct {
 }
 
 type Server struct {
-	m      *martini.ClassicMartini
+	m      *negroni.Negroni
 	mu     sync.Mutex
 	store  *store.Store
 	api    string
@@ -77,7 +79,7 @@ func New(c Config) (*Server, error) {
 
 	err := s.configure()
 	if err != nil {
-		glog.Errorf("unable to configure server, err: %q", err)
+		log.Error("unable to configure server", "err", err)
 		return nil, err
 	}
 
@@ -86,10 +88,6 @@ func New(c Config) (*Server, error) {
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.m.ServeHTTP(w, r)
-}
-
-func jsonError(x render.Render, status int, v interface{}) {
-	x.JSON(status, v)
 }
 
 func (s *Server) addConn(c *conn) {
@@ -131,7 +129,8 @@ func (s *Server) transformOps(c *conn, fd int, rev int, ops ot.Ops) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	glog.Infof("conn: %p, transforming %d ops", c, len(ops))
+	l := log.New("conn", c, "fd", fd, "rev", rev, "ops", ops)
+	l.Info("server transforming ops")
 
 	// extract last desc
 	c.mu.Lock()
@@ -139,7 +138,7 @@ func (s *Server) transformOps(c *conn, fd int, rev int, ops ot.Ops) {
 
 	d, ok := c.descs[fd]
 	if !ok {
-		glog.Errorf("conn: %p, fd: %d, rev: %d: invalid fd", c, fd, rev)
+		l.Error("invalid fd")
 	}
 
 	// extract doc
@@ -149,21 +148,14 @@ func (s *Server) transformOps(c *conn, fd int, rev int, ops ot.Ops) {
 	doc.mu.Lock()
 	defer doc.mu.Unlock()
 
+	l = l.New("desc", d) //, "doc", doc)
+
 	// extract concurrent ops
 	cops := []ot.Ops{}
 	if rev < len(doc.hist) {
 		cops = doc.hist[rev:]
 	}
-	glog.Infof("conn: %p, desc: %p, doc: %p, found %d concurrent ops-lists", c, d, doc, len(cops))
-
-	// transform input ops
-	// tops := ops
-	// for _, pop := range pops {
-	// 	topsPrev := tops
-	// 	//tops, _ = ot.Transform(tops, pop)
-	// 	tops, _ = ot.Transform(tops, pop)
-	// 	glog.Infof("transform:\n\tops: %s -> ops2: %s\n\tcon: %s", topsPrev.String(), tops.String(), pop.String())
-	// }
+	l.Info("server found concurrent ops-lists", "num", len(cops), "val", cops)
 
 	cops2 := ot.Ops{}
 	for _, cop := range cops {
@@ -175,32 +167,33 @@ func (s *Server) transformOps(c *conn, fd int, rev int, ops ot.Ops) {
 	for _, cop := range cops {
 		tops2, _ = ot.Transform(tops2, cop)
 	}
-	glog.Infof("xfrm:\n\tcops : %s\n\tcops2: %s\n\ttops : %s\n\ttops2: %s", cops, cops2, tops, tops2)
+	l.Info("server xfrm", "cops", cops, "cops2", cops2, "tops", tops, "tops2", tops2)
 
-	hist := doc.hist
-	comp := doc.comp
+	// hist := doc.hist
+	// comp := doc.comp
 	hist2 := append(doc.hist, tops)
 	comp2 := ot.Compose(doc.comp, tops)
 	comp3 := ot.Compose(doc.comp, tops2)
 
 	if !reflect.DeepEqual(ot.Normalize(comp2), ot.Normalize(comp3)) {
-		glog.Errorf("compose <> transform!")
+		l.Error("compose <> transform!")
 	}
 
-	glog.Infof("doc:\n\thist : %s\n\thist2: %s\n\tcomp : %s\n\tops  : %s\n\ttops : %s\n\tcomp2: %s\n\tcomp3: %s", hist, hist2, comp, ops, tops, comp2, comp3)
+	// l.Info("server result", "hist", hist, "hist2", hist2, "comp", comp, "comp2", comp2, "comp3", comp3, "tops", tops)
 	doc.hist = hist2
 	doc.comp = comp2
 	rev = len(doc.hist)
 
 	send := func(pdesc *desc) {
+		l := l.New("pconn", pdesc.conn, "pfd", pdesc.no)
 		if pdesc == d {
-			glog.Infof("conn: %p, pconn: %p, enqueueing %#v", c, pdesc.conn, writeresp{pdesc.no, rev})
+			l.Info("enqueueing writeresp", "msg", writeresp{pdesc.no, rev})
 			pdesc.conn.msgs <- writeresp{pdesc.no, rev}
 		} else {
 			pdesc.conn.mu.Lock()
 			defer pdesc.conn.mu.Unlock()
 
-			glog.Infof("conn: %p, pconn: %p, enqueueing server.write{fd: %d, rev: %d, ops: %s}", c, pdesc.conn, pdesc.no, rev, tops)
+			l.Info("enqueueing write", "msg", write{pdesc.no, rev, tops})
 			pdesc.conn.msgs <- write{pdesc.no, rev, tops}
 		}
 	}
@@ -246,45 +239,45 @@ func (s *Server) openDoc(c *conn, name string) {
 		fd:   fd.no,
 	}
 
-	// if len(d.hist) > 0 {
 	c.msgs <- write{
 		fd:  fd.no,
 		rev: len(d.hist),
 		ops: d.comp,
 	}
-	// }
 }
 
 func (s *Server) readConn(c *conn) {
 	// XXX: need to properly lock c + detect channel closure...
+	l := log.New("conn", c)
 	for {
 		var m msg.Msg
 
 		if err := c.ws.ReadJSON(&m); err != nil {
-			glog.Errorf("reading ops; got err %q", err)
+			l.Error("server reading ops", "err", err)
 			return
 		}
 
 		switch m.Cmd {
 		default:
-			glog.Errorf("conn: %p, got unknown cmd: %q, exiting", c, m)
+			log.Error("server got unknown cmd; exiting", "msg", m)
 			s.closeConn(c)
 			return
 		case msg.C_OPEN:
-			glog.Infof("conn: %p, got OPEN, name: %q", c, m.Name)
+			log.Info("server got OPEN", "msg", m)
 			s.openDoc(c, m.Name)
-			glog.Infof("conn: %p, done opening name: %q", c, m.Name)
+			log.Info("server finished OPEN", "msg", m)
 		case msg.C_WRITE:
-			glog.Infof("conn: %p, got WRITE fd: %d, rev: %d, ops: %s", c, m.Fd, m.Rev, m.Ops)
+			log.Info("server got WRITE", "msg", m)
 			s.transformOps(c, m.Fd, m.Rev, m.Ops)
-			glog.Infof("conn: %p, done with WRITE fd: %d, rev: %d, ops: %s", c, m.Fd, m.Rev, m.Ops)
+			log.Info("server finished WRITE", "msg", m)
 		}
 	}
 }
 
 func (s *Server) writeConn(c *conn) {
+	l := log.New("conn", c)
 	for m := range c.msgs {
-		glog.Infof("conn: %p: msg: %#v", c, m)
+		l.Info("server writing", "msg", m)
 		switch v := m.(type) {
 		case openresp:
 			c.ws.WriteJSON(msg.Msg{
@@ -299,7 +292,6 @@ func (s *Server) writeConn(c *conn) {
 				Rev: v.rev,
 			})
 		case write:
-			glog.Infof("conn: %p:\n\twriting fd: %d, rev: %d, ops: %s", c, v.fd, v.rev, v.ops)
 			c.ws.WriteJSON(msg.Msg{
 				Cmd: msg.C_WRITE,
 				Fd:  v.fd,
@@ -329,23 +321,39 @@ type write struct {
 }
 
 func (s *Server) configure() error {
-	m := martini.Classic()
+	m := negroni.New()
+	m.Use(negroni.HandlerFunc(func(w http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
+		log.Info("http request starting", "method", r.Method, "path", r.URL.Path, "hdrs", r.Header)
+		next(w, r)
+		log.Info("http request finished", "method", r.Method, "path", r.URL.Path, "hdrs", r.Header)
+	}))
+	m.Use(negroni.HandlerFunc(func(w http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
+		defer func() {
+			r := recover()
+			if r != nil {
+				log.Error("http caught panic", "debugstack", debug.Stack())
+			}
+		}()
+		next(w, r)
+	}))
+	m.Use(negroni.NewStatic(http.Dir(path.Join(s.assets, "public"))))
+
+	x := render.New(render.Options{
+		Directory: path.Join(s.assets, "templates"),
+	})
+
+	mux := http.NewServeMux()
 
 	upgrader := websocket.Upgrader{
 		ReadBufferSize:  1024,
 		WriteBufferSize: 1024,
 	}
 
-	m.Use(martini.Static(path.Join(s.assets, "public")))
-
-	m.Use(render.Renderer(render.Options{
-		Directory: path.Join(s.assets, "templates"),
-	}))
-
-	m.Get("/ws", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
+		log.Info("server starting websocket", "remoteaddr", r.RemoteAddr, "hdrs", r.Header)
 		ws, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
-			glog.Errorf("unable to upgrade incoming websocket connection, err: %q", err)
+			log.Error("server unable to upgrade incoming websocket connection", "err", err)
 			return
 		}
 
@@ -364,18 +372,21 @@ func (s *Server) configure() error {
 
 		s.writeConn(c)
 
-		glog.Infof("conn %p: exiting", c)
+		log.Info("server finished conn", "conn", c)
 	})
 
-	m.Get("/**", func(x render.Render, r *http.Request) {
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		log.Info("server offering pad", "pad", r.URL.Path)
 		v := struct {
 			API, Name string
 		}{
 			API:  s.api,
 			Name: r.URL.Path,
 		}
-		x.HTML(200, "root", v)
+		x.HTML(w, 200, "root", v)
 	})
+
+	m.UseHandler(mux)
 
 	s.m = m
 

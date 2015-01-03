@@ -59,7 +59,7 @@ func (r *Range) asLinearIndex(pos js.Object) int {
 	col := pos.Get("column").Int()
 
 	linesBefore := r.doc.Call("getLines", 0, row-1)
-	alert.JSON(linesBefore)
+	// alert.JSON(linesBefore)
 
 	idx := col + row
 	for i := 0; i < linesBefore.Length(); i++ {
@@ -81,8 +81,8 @@ func (r *Range) End() int {
 func RowCol(doc js.Object, pos int) js.Object {
 	var row, col int
 	lines := doc.Call("getAllLines")
-	alert.String("lines")
-	alert.JSON(lines)
+	// alert.String("lines")
+	// alert.JSON(lines)
 	for i := 0; i < lines.Length(); i++ {
 		lineLen := lines.Index(i).Length()
 		if pos <= lineLen {

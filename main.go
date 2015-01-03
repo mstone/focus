@@ -8,13 +8,15 @@ import (
 	"database/sql"
 	"flag"
 	"go/build"
+	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"runtime"
-	"time"
+	"runtime/debug"
 
-	"github.com/golang/glog"
 	_ "github.com/mattn/go-sqlite3"
+	log "gopkg.in/inconshreveable/log15.v2"
 
 	"github.com/mstone/focus/server"
 	"github.com/mstone/focus/store"
@@ -24,6 +26,7 @@ var driver = flag.String("driver", "sqlite3", "database/sql driver")
 var dsn = flag.String("dsn", ":memory:", "database/sql dsn")
 var api = flag.String("api", "ws://localhost:3000/ws", "API endpoint")
 var assets = flag.String("assets", defaultAssetPath(), "assets directory")
+var logPath = flag.String("log", "./focus.log", "log path")
 
 func defaultAssetPath() string {
 	p, err := build.Default.Import("github.com/mstone/focus", "", build.FindOnly)
@@ -38,18 +41,33 @@ func main() {
 
 	flag.Parse()
 
-	defer glog.Flush()
+	fh := log.Must.FileHandler(*logPath, log.LogfmtFormat())
+	// h := log.CallerStackHandler("%v",
+	h := log.CallerFileHandler(
+		log.MultiHandler(
+			fh,
+			log.StdoutHandler,
+		),
+	)
+	log.Root().SetHandler(h)
 
-	go func() {
-		for {
-			glog.Flush()
-			time.Sleep(time.Second)
+	defer func() {
+		r := recover()
+		if r != nil {
+			log.Error("focus caught panic", "debugstack", debug.Stack())
+		}
+		fh.(io.Closer).Close()
+		if r != nil {
+			os.Exit(1)
 		}
 	}()
 
+	log.Info("focus", "boot", true)
+
 	db, err := sql.Open(*driver, *dsn)
 	if err != nil {
-		glog.Fatalf("unable to open driver: %q, dsn: %q, err: %q", *driver, *dsn, err)
+		log.Crit("unable to open driver", "driver", *driver, "dsn", *dsn, "err", err)
+		return
 	}
 
 	storeCfg := store.Config{
@@ -60,7 +78,8 @@ func main() {
 
 	err = store.Reset()
 	if err != nil {
-		glog.Fatalf("unable to reset store, err: %q", err)
+		log.Crit("unable to reset store", "err", err)
+		return
 	}
 
 	serverCfg := server.Config{
@@ -71,17 +90,20 @@ func main() {
 
 	server, err := server.New(serverCfg)
 	if err != nil {
-		glog.Fatalf("unable to configure server, err: %q", err)
+		log.Crit("unable to configure server", "err", err)
+		return
 	}
 
 	apiUrl, err := url.Parse(*api)
 	if err != nil {
-		glog.Fatalf("unable to parse API URL, err: %q", err)
+		log.Crit("unable to parse API URL", "err", err)
+		return
 	}
 
+	log.Info("focus server starting", "host", apiUrl.Host)
 	err = http.ListenAndServe(apiUrl.Host, server)
 	if err != nil {
-		glog.Fatalf("unable to run server, err: %q", err)
+		log.Crit("unable to run server", "err", err)
+		return
 	}
-
 }

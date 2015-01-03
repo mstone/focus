@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"runtime/debug"
 	"sync"
 	"testing"
 	"time"
@@ -167,7 +168,7 @@ func (c *client) sendRandomOps() {
 	defer func() {
 		err := recover()
 		if err != nil {
-			glog.Errorf("client %p, caught panic: %q", err)
+			glog.Errorf("client %p, caught panic: %q, stack: %s", err, debug.Stack())
 		}
 	}()
 
@@ -272,8 +273,8 @@ func (c *client) readLoop() {
 	}
 }
 
-const numClients = 4
-const numRounds = 4
+const numClients = 2
+const numRounds = 1
 
 func TestRandom(t *testing.T) {
 	_, focusSrv := newTestServer(t)
@@ -313,6 +314,7 @@ func TestRandom(t *testing.T) {
 		if err != nil {
 			t.Errorf("unable to read OPEN_RESP, err: %q", err)
 		}
+		conn.SetReadDeadline(time.Time{})
 
 		if m.Cmd != msg.C_OPEN_RESP {
 			t.Errorf("did not get an OPEN_RESP; msg: %+v", m)
