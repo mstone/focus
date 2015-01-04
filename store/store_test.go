@@ -7,8 +7,8 @@ import (
 	"database/sql"
 	"testing"
 
-	"github.com/golang/glog"
 	_ "github.com/mattn/go-sqlite3"
+	log "gopkg.in/inconshreveable/log15.v2"
 )
 
 func mkTestStore(t *testing.T) *Store {
@@ -32,7 +32,6 @@ func mkTestStore(t *testing.T) *Store {
 }
 
 func TestStore(t *testing.T) {
-	defer glog.Flush()
 	t.Parallel()
 
 	s := mkTestStore(t)
@@ -41,5 +40,5 @@ func TestStore(t *testing.T) {
 	}
 
 	// empty
-	glog.Infof("begin")
+	log.Info("store test begin")
 }

@@ -23,16 +23,14 @@ focus:
 
     and several MIT-, 3BSD- and Apache 2.0-licensed Golang libraries including
 
-      * [golang/glog](https://github.com/golang/glog),
+      * [gopkg.in/inconshreveable/log15.v2](https://gopkg.in/inconshreveable/log15.v2),
       * [mattn/go-sqlite3](https://github.com/mattn/go-sqlite3),
+      * [mattn/go-colorable](https://github.com/mattn/go-colorable)
       * [gopherjs](https://github.com/gopherjs/gopherjs) (now forked for go1.3 compatibility: [mstone/gopherjs](https://github.com/mstone/gopherjs)),
-      * [martini](https://github.com/go-martini/martini),
-      * [martini-contrib/binding](https://github.com/martini-contrib/binding),
-      * [martini-contrib/render](https://github.com/martini-contrib/render),
+      * [codegangsta/negroni](https://github.com/codegangsta/negroni)
+      * [unrolled/render](https://github.com/unrolled/render)
       * [gorilla/websocket](https://github.com/gorilla/websocket)
-      * [codegangsta/inject](https://github.com/codegangsta/inject)
       * [gofuzz](https://github.com/google/gofuzz)
-      * [bpool](https://github.com/oxtoacart/bpool)
 
   * bundles:
 

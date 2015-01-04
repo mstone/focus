@@ -7,8 +7,9 @@ package store
 import (
 	"database/sql"
 	"fmt"
+	"runtime/debug"
 
-	"github.com/golang/glog"
+	log "gopkg.in/inconshreveable/log15.v2"
 )
 
 type Config struct {
@@ -29,17 +30,17 @@ func New(config Config) *Store {
 func transact(db *sql.DB, txFunc func(*sql.Tx) error) (err error) {
 	tx, err := db.Begin()
 	if err != nil {
-		glog.Errorf("unable to begin txn; err: %q", err)
+		log.Error("unable to begin txn", "err", err)
 		return
 	}
 	defer func() {
 		if p := recover(); p != nil {
 			switch p := p.(type) {
 			case error:
-				glog.Errorf("txn panic; err: %q", p)
+				log.Error("txn panic", "err", p, "debugstack", debug.Stack())
 				err = p
 			default:
-				glog.Errorf("txn panic; type: %t, err: %q", p, p)
+				log.Error("txn panic", "err", p, "debugstack", debug.Stack())
 				err = fmt.Errorf("%s", p)
 			}
 		}
@@ -49,7 +50,7 @@ func transact(db *sql.DB, txFunc func(*sql.Tx) error) (err error) {
 		}
 		err = tx.Commit()
 		if err != nil {
-			glog.Errorf("txn err on commit; err: %q", err)
+			log.Error("txn err on commit", "err", err, "debugstack", debug.Stack())
 			tx.Rollback()
 			return
 		}
@@ -60,17 +61,17 @@ func transact(db *sql.DB, txFunc func(*sql.Tx) error) (err error) {
 func transact2(db *sql.DB, txFunc func(*sql.Tx) (interface{}, error)) (ret interface{}, err error) {
 	tx, err := db.Begin()
 	if err != nil {
-		glog.Errorf("unable to begin txn; err: %q", err)
+		log.Error("unable to begin txn", "err", err)
 		return
 	}
 	defer func() {
 		if p := recover(); p != nil {
 			switch p := p.(type) {
 			case error:
-				glog.Errorf("txn panic; err: %q", p)
+				log.Error("txn panic", "err", p, "debugstack", debug.Stack())
 				err = p
 			default:
-				glog.Errorf("txn panic; type: %t, err: %q", p, p)
+				log.Error("txn panic", "err", p, "debugstack", debug.Stack())
 				err = fmt.Errorf("%s", p)
 			}
 		}
@@ -80,7 +81,7 @@ func transact2(db *sql.DB, txFunc func(*sql.Tx) (interface{}, error)) (ret inter
 		}
 		err = tx.Commit()
 		if err != nil {
-			glog.Errorf("txn err on commit; err: %q", err)
+			log.Error("txn err on commit", "err", err, "debugstack", debug.Stack())
 			tx.Rollback()
 			return
 		}

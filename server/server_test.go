@@ -1,10 +1,7 @@
 package server
 
 import (
-	"flag"
-	"github.com/google/gofuzz"
-	"github.com/mstone/focus/msg"
-	"github.com/mstone/focus/ot"
+	"fmt"
 	"go/build"
 	"io/ioutil"
 	"net/http"
@@ -14,8 +11,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/glog"
+	log "gopkg.in/inconshreveable/log15.v2"
+
+	"github.com/google/gofuzz"
 	"github.com/gorilla/websocket"
+
+	"github.com/mstone/focus/msg"
+	"github.com/mstone/focus/ot"
 )
 
 func newTestServer(t *testing.T) (*httptest.Server, *Server) {
@@ -29,7 +31,7 @@ func newTestServer(t *testing.T) (*httptest.Server, *Server) {
 		API:    "",
 		Assets: pkg.Dir,
 	}
-	glog.Infof("found assets path: %q", focusConf.Assets)
+	log.Info("found assets path", "assets", focusConf.Assets)
 
 	focusSrv, err := New(focusConf)
 	if err != nil {
@@ -42,7 +44,7 @@ func newTestServer(t *testing.T) (*httptest.Server, *Server) {
 
 	focusSrv.api = api
 
-	glog.Infof("test: %p, got new testing api addr: %s", t, api)
+	log.Info("got new testing api addr", "api", api)
 
 	return httpSrv, focusSrv
 }
@@ -74,7 +76,7 @@ func TestAPI(t *testing.T) {
 
 	// BUG(mistone): OPEN / really should probably fail, though we'll test that it works today.
 	vpName := "/"
-	glog.Infof("opening vp %s", vpName)
+	log.Info("opening vp", "name", vpName)
 	conn.SetWriteDeadline(time.Now().Add(100 * time.Millisecond))
 	err = conn.WriteJSON(msg.Msg{
 		Cmd:  msg.C_OPEN,
@@ -84,7 +86,7 @@ func TestAPI(t *testing.T) {
 		t.Errorf("unable to write OPEN, err: %q", err)
 	}
 
-	glog.Infof("awaiting OPEN_RESP for %s", vpName)
+	log.Info("awaiting OPEN_RESP", "name", vpName)
 	// read open resp
 	m := msg.Msg{}
 	conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
@@ -102,7 +104,7 @@ func TestAPI(t *testing.T) {
 	}
 
 	fd := m.Fd
-	glog.Infof("OPEN_RESP for %s yielded fd %d", vpName, fd)
+	log.Info("OPEN_RESP received", "name", vpName, "fd", fd)
 
 	// read initial write
 	m = msg.Msg{}
@@ -120,7 +122,7 @@ func TestAPI(t *testing.T) {
 		t.Errorf("server sent WRITE for a different vaporpad: fd %d vs %+v", fd, m)
 	}
 
-	glog.Infof("sending empty ops for %s/%d", vpName, fd)
+	log.Info("sending empty ops", "name", vpName, "fd", fd)
 	// send empty ops
 	conn.SetWriteDeadline(time.Now().Add(100 * time.Millisecond))
 	err = conn.WriteJSON(msg.Msg{
@@ -159,6 +161,7 @@ type client struct {
 	rev  int
 	doc  *ot.Doc
 	st   ot.State
+	l    log.Logger
 }
 
 func (c *client) sendRandomOps() {
@@ -168,11 +171,11 @@ func (c *client) sendRandomOps() {
 	defer func() {
 		err := recover()
 		if err != nil {
-			glog.Errorf("client %p, caught panic: %q, stack: %s", err, debug.Stack())
+			c.l.Error("client caught panic", "err", err, "debugstack", debug.Stack())
 		}
 	}()
 
-	glog.Infof("sending random ops for %s/%d", c.name, c.fd)
+	c.l.Info("client sending random ops", "name", c.name, "fd", c.fd)
 
 	ops := ot.Ops{}
 	f := fuzz.New().NilChance(0).Funcs(
@@ -201,7 +204,7 @@ func (c *client) sendRandomOps() {
 		},
 	)
 	f.NumElements(1, 1).Fuzz(&ops)
-	glog.Infof("client: %p, sending random ops: %s", c, ops.String())
+	c.l.Info("client generated ops", "ops", ops)
 
 	c.doc.Apply(ops)
 	c.st = c.st.Client(c, ops)
@@ -216,16 +219,16 @@ func (c *client) Send(ops ot.Ops) {
 		Ops: ops,
 	})
 	if err != nil {
-		glog.Errorf("unable to send WRITE, err: %q", err)
+		c.l.Error("client unable to send WRITE", "err", err)
 	}
 }
 
 func (c *client) Recv(rev int, ops ot.Ops) {
-	glog.Infof("client: %p, fd: %d, doc: %#v, ops: %s", c, c.fd, c.doc, ops)
+	c.l.Info("client recv", "rev", rev, "ops", ops)
 	pdoc := c.doc.String()
 	c.doc.Apply(ops)
 	ndoc := c.doc.String()
-	glog.Infof("client: %p, fd: %d:\n\tpdoc: %q\n\tndoc: %q", c, c.fd, pdoc, ndoc)
+	c.l.Info("client recv done", "fd", c.fd, "prev", pdoc, "next", ndoc)
 }
 
 func (c *client) Ack(rev int) {
@@ -262,7 +265,7 @@ func (c *client) readLoop() {
 		//c.ws.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
 		err := c.ws.ReadJSON(&m)
 		if err != nil {
-			glog.Errorf("client %p: unable to read response, err: %q", c, err)
+			log.Error("client unable to read response", "err", err)
 		}
 		switch m.Cmd {
 		case msg.C_WRITE_RESP:
@@ -281,10 +284,28 @@ func TestRandom(t *testing.T) {
 
 	wg := &sync.WaitGroup{}
 
-	clients := make([]client, numClients)
+	clients := make([]*client, numClients)
 
 	run := func(idx int) {
 		defer wg.Done()
+
+		// BUG(mistone): OPEN / really should probably fail, though we'll test that it works today.
+		vpName := "/"
+
+		cwg := &sync.WaitGroup{}
+
+		c := &client{
+			mu:   sync.Mutex{},
+			wg:   cwg,
+			name: vpName,
+			rev:  0,
+			doc:  ot.NewDoc(),
+			st:   &ot.Synchronized{},
+		}
+		clients[idx] = c
+		c.l = log.New("client", log.Lazy{func() string {
+			return fmt.Sprintf("%p", c)
+		}})
 
 		dialer := websocket.Dialer{}
 
@@ -294,9 +315,9 @@ func TestRandom(t *testing.T) {
 		}
 		defer conn.Close()
 
-		// BUG(mistone): OPEN / really should probably fail, though we'll test that it works today.
-		vpName := "/"
-		glog.Infof("opening vp %s", vpName)
+		c.ws = conn
+
+		c.l.Info("opening vp %s", vpName)
 		conn.SetWriteDeadline(time.Now().Add(100 * time.Millisecond))
 		err = conn.WriteJSON(msg.Msg{
 			Cmd:  msg.C_OPEN,
@@ -306,7 +327,7 @@ func TestRandom(t *testing.T) {
 			t.Errorf("unable to write OPEN, err: %q", err)
 		}
 
-		glog.Infof("awaiting OPEN_RESP for %s", vpName)
+		c.l.Info("awaiting OPEN_RESP", "name", vpName)
 		// read open resp
 		m := msg.Msg{}
 		conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
@@ -323,23 +344,9 @@ func TestRandom(t *testing.T) {
 		if m.Name != vpName {
 			t.Errorf("server opened a different vaporpad: %s vs %+v", vpName, m)
 		}
-
-		fd := m.Fd
-		glog.Infof("OPEN_RESP for %s yielded fd %d", vpName, fd)
-
-		cwg := &sync.WaitGroup{}
-
-		c := client{
-			mu:   sync.Mutex{},
-			wg:   cwg,
-			name: vpName,
-			fd:   fd,
-			ws:   conn,
-			rev:  0,
-			doc:  ot.NewDoc(),
-			st:   &ot.Synchronized{},
-		}
-		clients[idx] = c
+		c.name = vpName
+		c.fd = m.Fd
+		c.l.Info("got OPEN_RESP", "name", c.name, "fd", c.fd)
 
 		cwg.Add(2)
 		go c.writeLoop()
@@ -363,14 +370,9 @@ func TestRandom(t *testing.T) {
 }
 
 func init() {
-	flag.Parse()
-
-	defer glog.Flush()
-
-	go func() {
-		for {
-			glog.Flush()
-			time.Sleep(time.Second)
-		}
-	}()
+	log.Root().SetHandler(
+		log.CallerFileHandler(
+			log.StderrHandler,
+		),
+	)
 }
