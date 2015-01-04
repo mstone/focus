@@ -5,12 +5,15 @@
 package server
 
 import (
+	"fmt"
 	"github.com/unrolled/render"
 	"net/http"
 	"path"
 	"reflect"
 	"runtime/debug"
+	"strings"
 	"sync"
+	"time"
 
 	log "gopkg.in/inconshreveable/log15.v2"
 
@@ -99,6 +102,8 @@ func (s *Server) addConn(c *conn) {
 
 func (s *Server) closeConn(c *conn) {
 	// XXX: this code is likely buggy: tightly coupled, badly locked, and buggy! :-/
+	l := log.New("conn", c)
+	l.Info("closeConn starting")
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -106,13 +111,23 @@ func (s *Server) closeConn(c *conn) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	c.ws.Close()
-	close(c.msgs)
+	// var err error
+	cm := websocket.FormatCloseMessage(websocket.CloseInternalServerErr, "done")
+	err := c.ws.WriteControl(websocket.CloseMessage, cm, time.Now().Add(100*time.Millisecond))
+	if err != nil {
+		l.Error("closeConn sent ws CLOSE", "err", err)
+	}
+
+	err = c.ws.Close()
+	if err != nil {
+		l.Error("closeConn force-closed ws", "err", err)
+	}
 
 	unlink := func(desc *desc) {
 		desc.doc.mu.Lock()
 		defer desc.doc.mu.Unlock()
 
+		l.Info("closeConn unlinking desc", "desc", desc)
 		delete(desc.doc.descs, desc)
 		delete(s.descs, desc)
 		delete(c.descs, desc.no)
@@ -122,14 +137,21 @@ func (s *Server) closeConn(c *conn) {
 		unlink(desc)
 	}
 
+	l.Info("closeConn closing msgs")
+	close(c.msgs)
+	c.msgs = nil
+
+	l.Info("closeConn disintegrating conn")
 	delete(s.conns, c)
+
+	l.Info("closeConn finished")
 }
 
 func (s *Server) transformOps(c *conn, fd int, rev int, ops ot.Ops) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	l := log.New("conn", c, "fd", fd, "rev", rev, "ops", ops)
+	l := log.New("conn", fmt.Sprintf("%p", c), "fd", fd, "rev", rev, "ops", ops)
 	l.Info("server transforming ops")
 
 	// extract last desc
@@ -187,14 +209,21 @@ func (s *Server) transformOps(c *conn, fd int, rev int, ops ot.Ops) {
 	send := func(pdesc *desc) {
 		l := l.New("pconn", pdesc.conn, "pfd", pdesc.no)
 		if pdesc == d {
-			l.Info("enqueueing writeresp", "msg", writeresp{pdesc.no, rev})
+			l.Info("server enqueueing WRITE_RESP", "msg", writeresp{pdesc.no, rev})
 			pdesc.conn.msgs <- writeresp{pdesc.no, rev}
 		} else {
 			pdesc.conn.mu.Lock()
 			defer pdesc.conn.mu.Unlock()
 
-			l.Info("enqueueing write", "msg", write{pdesc.no, rev, tops})
-			pdesc.conn.msgs <- write{pdesc.no, rev, tops}
+			if pdesc.conn.msgs != nil {
+				m := write{pdesc.no, rev, tops}
+				l.Info("server enqueueing WRITE", "msg", m)
+				// XXX: do we actually want a blocking write here?
+				pdesc.conn.msgs <- m
+				l.Info("server enqueued WRITE", "msg", m)
+			} else {
+				l.Info("server skipping WRITE; nil pconn.msgs", "pdesc", pdesc, "pconn", pdesc.conn)
+			}
 		}
 	}
 
@@ -253,7 +282,8 @@ func (s *Server) readConn(c *conn) {
 		var m msg.Msg
 
 		if err := c.ws.ReadJSON(&m); err != nil {
-			l.Error("server reading ops", "err", err)
+			l.Error("server read error; closing conn", "err", err)
+			// s.closeConn(c)
 			return
 		}
 
@@ -275,29 +305,47 @@ func (s *Server) readConn(c *conn) {
 }
 
 func (s *Server) writeConn(c *conn) {
-	l := log.New("conn", c)
-	for m := range c.msgs {
-		l.Info("server writing", "msg", m)
-		switch v := m.(type) {
-		case openresp:
-			c.ws.WriteJSON(msg.Msg{
-				Cmd:  msg.C_OPEN_RESP,
-				Name: v.name,
-				Fd:   v.fd,
-			})
-		case writeresp:
-			c.ws.WriteJSON(msg.Msg{
-				Cmd: msg.C_WRITE_RESP,
-				Fd:  v.fd,
-				Rev: v.rev,
-			})
-		case write:
-			c.ws.WriteJSON(msg.Msg{
-				Cmd: msg.C_WRITE,
-				Fd:  v.fd,
-				Rev: v.rev,
-				Ops: v.ops,
-			})
+	l := log.New("conn", fmt.Sprintf("%p", c))
+	for {
+		select {
+		default:
+			ok := func() bool {
+				c.mu.Lock()
+				defer c.mu.Unlock()
+				return c.msgs != nil
+			}()
+			if !ok {
+				l.Info("server conn has nil cchan, exiting write loop")
+				return
+			}
+			time.Sleep(10 * time.Millisecond)
+		case m, ok := <-c.msgs:
+			if !ok {
+				l.Info("server conn has closed cchan, exiting write loop")
+				return
+			}
+			l.Info("server writing "+strings.ToUpper(reflect.TypeOf(m).Name()), "msg", m)
+			switch v := m.(type) {
+			case openresp:
+				c.ws.WriteJSON(msg.Msg{
+					Cmd:  msg.C_OPEN_RESP,
+					Name: v.name,
+					Fd:   v.fd,
+				})
+			case writeresp:
+				c.ws.WriteJSON(msg.Msg{
+					Cmd: msg.C_WRITE_RESP,
+					Fd:  v.fd,
+					Rev: v.rev,
+				})
+			case write:
+				c.ws.WriteJSON(msg.Msg{
+					Cmd: msg.C_WRITE,
+					Fd:  v.fd,
+					Rev: v.rev,
+					Ops: v.ops,
+				})
+			}
 		}
 	}
 }
@@ -359,7 +407,7 @@ func (s *Server) configure() error {
 
 		c := &conn{
 			mu:    sync.Mutex{},
-			msgs:  make(chan interface{}, 5),
+			msgs:  make(chan interface{}),
 			ws:    ws,
 			descs: map[int]*desc{},
 		}

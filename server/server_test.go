@@ -161,6 +161,7 @@ type client struct {
 	rev  int
 	doc  *ot.Doc
 	st   ot.State
+	plen int
 	l    log.Logger
 }
 
@@ -208,9 +209,12 @@ func (c *client) sendRandomOps() {
 
 	c.doc.Apply(ops)
 	c.st = c.st.Client(c, ops)
+
+	c.l.Info("client send returned")
 }
 
 func (c *client) Send(ops ot.Ops) {
+	c.plen++
 	//c.ws.SetWriteDeadline(time.Now().Add(100 * time.Millisecond))
 	err := c.ws.WriteJSON(msg.Msg{
 		Cmd: msg.C_WRITE,
@@ -221,6 +225,10 @@ func (c *client) Send(ops ot.Ops) {
 	if err != nil {
 		c.l.Error("client unable to send WRITE", "err", err)
 	}
+}
+
+func (c *client) String() string {
+	return fmt.Sprintf("{%p, %d}", c, c.plen)
 }
 
 func (c *client) Recv(rev int, ops ot.Ops) {
@@ -239,6 +247,7 @@ func (c *client) onWriteResp(m msg.Msg) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	c.l.Info("client got WRITE_RESP")
 	c.st = c.st.Ack(c, m.Rev)
 }
 
@@ -246,6 +255,7 @@ func (c *client) onWrite(m msg.Msg) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	c.l.Info("client got WRITE")
 	c.st = c.st.Server(c, m.Rev, m.Ops)
 }
 
@@ -265,8 +275,10 @@ func (c *client) readLoop() {
 		//c.ws.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
 		err := c.ws.ReadJSON(&m)
 		if err != nil {
-			log.Error("client unable to read response", "err", err)
+			c.l.Error("client unable to read response", "err", err)
 		}
+		c.plen++
+		c.l.Info("client read msg", "client", c, "msg", m)
 		switch m.Cmd {
 		case msg.C_WRITE_RESP:
 			c.onWriteResp(m)
@@ -277,9 +289,14 @@ func (c *client) readLoop() {
 }
 
 const numClients = 2
-const numRounds = 1
+const numRounds = 3
 
 func TestRandom(t *testing.T) {
+	go func() {
+		time.Sleep(300 * time.Millisecond)
+		panic("boom")
+	}()
+
 	_, focusSrv := newTestServer(t)
 
 	wg := &sync.WaitGroup{}
@@ -304,10 +321,12 @@ func TestRandom(t *testing.T) {
 		}
 		clients[idx] = c
 		c.l = log.New("client", log.Lazy{func() string {
-			return fmt.Sprintf("%p", c)
+			return c.String()
 		}})
 
 		dialer := websocket.Dialer{}
+
+		c.l.Info("client dialing server", "api", focusSrv.api)
 
 		conn, _, err := dialer.Dial(focusSrv.api, nil)
 		if err != nil {
@@ -315,9 +334,10 @@ func TestRandom(t *testing.T) {
 		}
 		defer conn.Close()
 
+		c.l.Info("client websocket open", "api", focusSrv.api)
 		c.ws = conn
 
-		c.l.Info("opening vp %s", vpName)
+		c.l.Info("client sending OPEN", "name", vpName)
 		conn.SetWriteDeadline(time.Now().Add(100 * time.Millisecond))
 		err = conn.WriteJSON(msg.Msg{
 			Cmd:  msg.C_OPEN,
@@ -327,31 +347,33 @@ func TestRandom(t *testing.T) {
 			t.Errorf("unable to write OPEN, err: %q", err)
 		}
 
-		c.l.Info("awaiting OPEN_RESP", "name", vpName)
+		c.l.Info("client awaiting OPEN_RESP", "name", vpName)
 		// read open resp
 		m := msg.Msg{}
 		conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
 		err = conn.ReadJSON(&m)
 		if err != nil {
-			t.Errorf("unable to read OPEN_RESP, err: %q", err)
+			t.Errorf("server unable to read OPEN_RESP, err: %q", err)
 		}
 		conn.SetReadDeadline(time.Time{})
 
 		if m.Cmd != msg.C_OPEN_RESP {
-			t.Errorf("did not get an OPEN_RESP; msg: %+v", m)
+			t.Errorf("client did not get an OPEN_RESP; msg: %+v", m)
 		}
 
 		if m.Name != vpName {
-			t.Errorf("server opened a different vaporpad: %s vs %+v", vpName, m)
+			t.Errorf("client got OPEN_RESP with wrong vaporpad: %s vs %+v", vpName, m)
 		}
 		c.name = vpName
 		c.fd = m.Fd
-		c.l.Info("got OPEN_RESP", "name", c.name, "fd", c.fd)
+		c.l.Info("client got OPEN_RESP", "name", c.name, "fd", c.fd)
 
+		c.l.Info("client starting reading + writing", "name", c.name, "fd", c.fd)
 		cwg.Add(2)
 		go c.writeLoop()
 		go c.readLoop()
 		cwg.Wait()
+		c.l.Info("client done")
 	}
 
 	wg.Add(numClients)

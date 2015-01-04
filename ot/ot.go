@@ -97,7 +97,7 @@ func (o *Op) String() string {
 	case o.IsRetain():
 		return fmt.Sprintf("R%d", o.Size)
 	case o.IsInsert():
-		return fmt.Sprintf("I%q", AsString(o.Body))
+		return fmt.Sprintf("I%s", AsString(o.Body))
 	default:
 		return fmt.Sprintf("E%#v", o)
 	}
@@ -111,10 +111,9 @@ func (os Ops) String() string {
 		for _, o := range os {
 			strs = append(strs, o.String())
 		}
-		//return fmt.Sprintf("[]op{\n\t%s\n\t}", strings.Join(strs, ",\n\t"))
-		return fmt.Sprintf("Ops{%s}", strings.Join(strs, " "))
+		return fmt.Sprintf("[%s]", strings.Join(strs, " "))
 	} else {
-		return "Ops{}"
+		return "[]"
 	}
 }
 
