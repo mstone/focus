@@ -31,7 +31,7 @@ func newTestServer(t *testing.T) (*httptest.Server, *Server) {
 		API:    "",
 		Assets: pkg.Dir,
 	}
-	log.Info("found assets path", "assets", focusConf.Assets)
+	log.Info("test found assets path", "assets", focusConf.Assets)
 
 	focusSrv, err := New(focusConf)
 	if err != nil {
@@ -44,7 +44,7 @@ func newTestServer(t *testing.T) (*httptest.Server, *Server) {
 
 	focusSrv.api = api
 
-	log.Info("got new testing api addr", "api", api)
+	log.Info("test got new testing api addr", "api", api)
 
 	return httpSrv, focusSrv
 }
@@ -54,12 +54,12 @@ func TestGetPad(t *testing.T) {
 
 	resp, err := http.Get(httpSrv.URL)
 	if err != nil {
-		t.Errorf("unable to GET /; err: %q", err)
+		t.Errorf("test unable to GET /; err: %q", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
 		body, _ := ioutil.ReadAll(resp.Body)
-		t.Errorf("GET / did not return 200, resp: %#v, body: %s", resp, string(body))
+		t.Errorf("test GET / did not return 200, resp: %#v, body: %s", resp, string(body))
 	}
 }
 
@@ -70,13 +70,13 @@ func TestAPI(t *testing.T) {
 
 	conn, _, err := dialer.Dial(focusSrv.api, nil)
 	if err != nil {
-		t.Errorf("unable to dial, err: %q", err)
+		t.Errorf("test unable to dial, err: %q", err)
 	}
 	defer conn.Close()
 
 	// BUG(mistone): OPEN / really should probably fail, though we'll test that it works today.
 	vpName := "/"
-	log.Info("opening vp", "name", vpName)
+	log.Info("test opening vp", "name", vpName)
 	conn.SetWriteDeadline(time.Now().Add(100 * time.Millisecond))
 	err = conn.WriteJSON(msg.Msg{
 		Cmd:  msg.C_OPEN,
@@ -86,43 +86,43 @@ func TestAPI(t *testing.T) {
 		t.Errorf("unable to write OPEN, err: %q", err)
 	}
 
-	log.Info("awaiting OPEN_RESP", "name", vpName)
+	log.Info("test awaiting OPEN_RESP", "name", vpName)
 	// read open resp
 	m := msg.Msg{}
 	conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
 	err = conn.ReadJSON(&m)
 	if err != nil {
-		t.Errorf("unable to read OPEN_RESP, err: %q", err)
+		t.Fatalf("test unable to read OPEN_RESP, err: %q", err)
 	}
 
 	if m.Cmd != msg.C_OPEN_RESP {
-		t.Errorf("did not get an OPEN_RESP; msg: %+v", m)
+		t.Fatalf("test did not get an OPEN_RESP; msg: %+v", m)
 	}
 
 	if m.Name != vpName {
-		t.Errorf("server opened a different vaporpad: %s vs %+v", vpName, m)
+		t.Fatalf("server opened a different vaporpad: %s vs %+v", vpName, m)
 	}
 
 	fd := m.Fd
-	log.Info("OPEN_RESP received", "name", vpName, "fd", fd)
+	log.Info("test received OPEN_RESP", "name", vpName, "fd", fd)
 
 	// read initial write
 	m = msg.Msg{}
 	conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
 	err = conn.ReadJSON(&m)
 	if err != nil {
-		t.Errorf("unable to read initial WRITE, err: %q", err)
+		t.Errorf("test unable to read initial WRITE, err: %q", err)
 	}
 
 	if m.Cmd != msg.C_WRITE {
-		t.Error("did not get a WRITE; msg: %+v", m)
+		t.Error("test did not get a WRITE; msg: %+v", m)
 	}
 
 	if m.Fd != fd {
-		t.Errorf("server sent WRITE for a different vaporpad: fd %d vs %+v", fd, m)
+		t.Errorf("test received WRITE for a different vaporpad: fd %d vs %+v", fd, m)
 	}
 
-	log.Info("sending empty ops", "name", vpName, "fd", fd)
+	log.Info("test sending empty ops", "name", vpName, "fd", fd)
 	// send empty ops
 	conn.SetWriteDeadline(time.Now().Add(100 * time.Millisecond))
 	err = conn.WriteJSON(msg.Msg{
@@ -132,7 +132,7 @@ func TestAPI(t *testing.T) {
 		Ops: ot.Ops{},
 	})
 	if err != nil {
-		t.Errorf("unable to send WRITE, err: %q", err)
+		t.Errorf("test unable to send WRITE, err: %q", err)
 	}
 
 	// read ack
@@ -140,15 +140,15 @@ func TestAPI(t *testing.T) {
 	conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
 	err = conn.ReadJSON(&m)
 	if err != nil {
-		t.Errorf("unable to read WRITE_RESP, err: %q", err)
+		t.Errorf("test unable to read WRITE_RESP, err: %q", err)
 	}
 
 	if m.Cmd != msg.C_WRITE_RESP {
-		t.Error("did not get a WRITE_RESP; msg: %+v", m)
+		t.Error("test did not get a WRITE_RESP; msg: %+v", m)
 	}
 
 	if m.Fd != fd {
-		t.Errorf("server sent WRITE_RESP for a different vaporpad: fd %d vs %+v", fd, m)
+		t.Errorf("test received a WRITE_RESP for a different vaporpad: fd %d vs %+v", fd, m)
 	}
 }
 

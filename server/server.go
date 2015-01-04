@@ -5,22 +5,16 @@
 package server
 
 import (
-	"fmt"
 	"github.com/unrolled/render"
 	"net/http"
 	"path"
-	"reflect"
 	"runtime/debug"
-	"strings"
 	"sync"
-	"time"
 
 	log "gopkg.in/inconshreveable/log15.v2"
 
 	"github.com/codegangsta/negroni"
 	"github.com/gorilla/websocket"
-
-	"github.com/mstone/focus/msg"
 	"github.com/mstone/focus/ot"
 	"github.com/mstone/focus/store"
 )
@@ -31,37 +25,14 @@ type Config struct {
 	Store  *store.Store
 }
 
-// struct conn represents an open WebSocket connection.
-type conn struct {
-	mu    sync.Mutex
-	msgs  chan interface{}
-	ws    *websocket.Conn
-	descs map[int]*desc
-}
-
-// struct desc represents an open VPP pad description (like an fd)
-type desc struct {
-	no   int
-	conn *conn
-	doc  *doc
-}
-
-// struct doc represents a vaporpad (like a file)
-type doc struct {
-	mu    sync.Mutex
-	descs map[*desc]struct{}
-	hist  []ot.Ops
-	comp  ot.Ops
-}
-
 type Server struct {
 	m      *negroni.Negroni
-	mu     sync.Mutex
+	l      log.Logger
+	msgs   chan interface{}
 	store  *store.Store
 	api    string
 	assets string
 	conns  map[*conn]struct{}
-	descs  map[*desc]struct{}
 	docs   map[*doc]struct{}
 	names  map[string]*doc
 	next   int
@@ -69,12 +40,12 @@ type Server struct {
 
 func New(c Config) (*Server, error) {
 	s := &Server{
-		mu:     sync.Mutex{},
+		msgs:   make(chan interface{}),
+		l:      log.Root(),
 		store:  c.Store,
 		api:    c.API,
 		assets: c.Assets,
 		conns:  map[*conn]struct{}{},
-		descs:  map[*desc]struct{}{},
 		docs:   map[*doc]struct{}{},
 		names:  map[string]*doc{},
 		next:   1,
@@ -94,267 +65,88 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) addConn(c *conn) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	s.conns[c] = struct{}{}
 }
 
-func (s *Server) closeConn(c *conn) {
-	// XXX: this code is likely buggy: tightly coupled, badly locked, and buggy! :-/
-	l := log.New("conn", c)
-	l.Info("closeConn starting")
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	// var err error
-	cm := websocket.FormatCloseMessage(websocket.CloseInternalServerErr, "done")
-	err := c.ws.WriteControl(websocket.CloseMessage, cm, time.Now().Add(100*time.Millisecond))
-	if err != nil {
-		l.Error("closeConn sent ws CLOSE", "err", err)
-	}
-
-	err = c.ws.Close()
-	if err != nil {
-		l.Error("closeConn force-closed ws", "err", err)
-	}
-
-	unlink := func(desc *desc) {
-		desc.doc.mu.Lock()
-		defer desc.doc.mu.Unlock()
-
-		l.Info("closeConn unlinking desc", "desc", desc)
-		delete(desc.doc.descs, desc)
-		delete(s.descs, desc)
-		delete(c.descs, desc.no)
-	}
-
-	for _, desc := range c.descs {
-		unlink(desc)
-	}
-
-	l.Info("closeConn closing msgs")
-	close(c.msgs)
-	c.msgs = nil
-
-	l.Info("closeConn disintegrating conn")
-	delete(s.conns, c)
-
-	l.Info("closeConn finished")
-}
-
-func (s *Server) transformOps(c *conn, fd int, rev int, ops ot.Ops) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	l := log.New("conn", fmt.Sprintf("%p", c), "fd", fd, "rev", rev, "ops", ops)
-	l.Info("server transforming ops")
-
-	// extract last desc
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	d, ok := c.descs[fd]
-	if !ok {
-		l.Error("invalid fd")
-	}
-
-	// extract doc
-	doc := d.doc
-
-	// process ops
-	doc.mu.Lock()
-	defer doc.mu.Unlock()
-
-	l = l.New("desc", d) //, "doc", doc)
-
-	// extract concurrent ops
-	cops := []ot.Ops{}
-	if rev < len(doc.hist) {
-		cops = doc.hist[rev:]
-	}
-	l.Info("server found concurrent ops-lists", "num", len(cops), "val", cops)
-
-	cops2 := ot.Ops{}
-	for _, cop := range cops {
-		cops2 = ot.Compose(cops2, cop)
-	}
-	tops, _ := ot.Transform(ops, cops2)
-
-	tops2 := ops
-	for _, cop := range cops {
-		tops2, _ = ot.Transform(tops2, cop)
-	}
-	l.Info("server xfrm", "cops", cops, "cops2", cops2, "tops", tops, "tops2", tops2)
-
-	// hist := doc.hist
-	// comp := doc.comp
-	hist2 := append(doc.hist, tops)
-	comp2 := ot.Compose(doc.comp, tops)
-	comp3 := ot.Compose(doc.comp, tops2)
-
-	if !reflect.DeepEqual(ot.Normalize(comp2), ot.Normalize(comp3)) {
-		l.Error("compose <> transform!")
-	}
-
-	// l.Info("server result", "hist", hist, "hist2", hist2, "comp", comp, "comp2", comp2, "comp3", comp3, "tops", tops)
-	doc.hist = hist2
-	doc.comp = comp2
-	rev = len(doc.hist)
-
-	send := func(pdesc *desc) {
-		l := l.New("pconn", pdesc.conn, "pfd", pdesc.no)
-		if pdesc == d {
-			l.Info("server enqueueing WRITE_RESP", "msg", writeresp{pdesc.no, rev})
-			pdesc.conn.msgs <- writeresp{pdesc.no, rev}
-		} else {
-			pdesc.conn.mu.Lock()
-			defer pdesc.conn.mu.Unlock()
-
-			if pdesc.conn.msgs != nil {
-				m := write{pdesc.no, rev, tops}
-				l.Info("server enqueueing WRITE", "msg", m)
-				// XXX: do we actually want a blocking write here?
-				pdesc.conn.msgs <- m
-				l.Info("server enqueued WRITE", "msg", m)
-			} else {
-				l.Info("server skipping WRITE; nil pconn.msgs", "pdesc", pdesc, "pconn", pdesc.conn)
-			}
-		}
-	}
-
-	for pdesc, _ := range doc.descs {
-		send(pdesc)
-	}
-}
-
-func (s *Server) openDoc(c *conn, name string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
+func (s *Server) openDoc(w chan allocdocresp, name string) {
+	s.l.Info("server got allocdoc", "name", name)
 	d, ok := s.names[name]
 	if !ok {
 		d = &doc{
-			mu:    sync.Mutex{},
-			descs: map[*desc]struct{}{},
+			msgs:  make(chan interface{}),
+			srvr:  s.msgs,
+			wg:    sync.WaitGroup{},
+			name:  name,
+			conns: map[int]chan interface{}{},
 			hist:  []ot.Ops{},
 			comp:  ot.Ops{},
 		}
+		d.l = log.New("doc", log.Lazy{
+			func() string {
+				return d.String()
+			},
+		})
 		s.names[name] = d
+		go d.Run()
 	}
-
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	fd := &desc{
-		no:   s.next,
-		conn: c,
-		doc:  d,
+	s.l.Info("server sending allocdocresp", "doc", d)
+	w <- allocdocresp{
+		err: nil,
+		doc: d.msgs,
 	}
-	s.next++
-
-	c.descs[fd.no] = fd
-	d.descs[fd] = struct{}{}
-
-	c.msgs <- openresp{
-		name: name,
-		fd:   fd.no,
-	}
-
-	c.msgs <- write{
-		fd:  fd.no,
-		rev: len(d.hist),
-		ops: d.comp,
-	}
+	s.l.Info("server finished allocdoc", "name", name)
 }
 
-func (s *Server) readConn(c *conn) {
-	// XXX: need to properly lock c + detect channel closure...
-	l := log.New("conn", c)
-	for {
-		var m msg.Msg
+/*
 
-		if err := c.ws.ReadJSON(&m); err != nil {
-			l.Error("server read error; closing conn", "err", err)
-			// s.closeConn(c)
-			return
-		}
+Proto:
 
-		switch m.Cmd {
-		default:
-			log.Error("server got unknown cmd; exiting", "msg", m)
-			s.closeConn(c)
-			return
-		case msg.C_OPEN:
-			log.Info("server got OPEN", "msg", m)
-			s.openDoc(c, m.Name)
-			log.Info("server finished OPEN", "msg", m)
-		case msg.C_WRITE:
-			log.Info("server got WRITE", "msg", m)
-			s.transformOps(c, m.Fd, m.Rev, m.Ops)
-			log.Info("server finished WRITE", "msg", m)
-		}
-	}
+cl ----  HELLO --->  srv
+cl <---  *conn ----  srv
+cl ----  OPEN ---->  conn
+         name
+                     conn  ----- allocdoc ----->  srv
+                     conn  <----   *doc  -------  srv
+                     conn  -----   open    ---->  doc
+                                                  doc ----- allocfd -----> srv
+                                                  doc <----  *fd   ------- srv
+                     conn  <------  fd  --------  doc
+cl <----  fd  -----  conn
+
+*/
+
+// processed by Server for conn
+type allocdoc struct {
+	reply chan allocdocresp
+	name  string
 }
 
-func (s *Server) writeConn(c *conn) {
-	l := log.New("conn", fmt.Sprintf("%p", c))
-	for {
-		select {
-		default:
-			ok := func() bool {
-				c.mu.Lock()
-				defer c.mu.Unlock()
-				return c.msgs != nil
-			}()
-			if !ok {
-				l.Info("server conn has nil cchan, exiting write loop")
-				return
-			}
-			time.Sleep(10 * time.Millisecond)
-		case m, ok := <-c.msgs:
-			if !ok {
-				l.Info("server conn has closed cchan, exiting write loop")
-				return
-			}
-			l.Info("server writing "+strings.ToUpper(reflect.TypeOf(m).Name()), "msg", m)
-			switch v := m.(type) {
-			case openresp:
-				c.ws.WriteJSON(msg.Msg{
-					Cmd:  msg.C_OPEN_RESP,
-					Name: v.name,
-					Fd:   v.fd,
-				})
-			case writeresp:
-				c.ws.WriteJSON(msg.Msg{
-					Cmd: msg.C_WRITE_RESP,
-					Fd:  v.fd,
-					Rev: v.rev,
-				})
-			case write:
-				c.ws.WriteJSON(msg.Msg{
-					Cmd: msg.C_WRITE,
-					Fd:  v.fd,
-					Rev: v.rev,
-					Ops: v.ops,
-				})
-			}
-		}
-	}
+type allocdocresp struct {
+	err error
+	doc chan interface{}
 }
 
-type open struct{}
+// processed by doc for conn
+type open struct {
+	conn chan interface{}
+	name string
+}
 
 type openresp struct {
+	err  error
+	doc  chan interface{}
 	name string
 	fd   int
+}
+
+// processed by Server for doc
+type allocfd struct {
+	reply chan allocfdresp
+}
+
+type allocfdresp struct {
+	err error
+	fd  int
 }
 
 type writeresp struct {
@@ -368,12 +160,37 @@ type write struct {
 	ops ot.Ops
 }
 
+func (s *Server) allocFd(reply chan allocfdresp) {
+	fd := s.next
+	s.next++
+	s.l.Info("server allocating fd", "fd", fd)
+	reply <- allocfdresp{
+		err: nil,
+		fd:  fd,
+	}
+	s.l.Info("server sent allocfdresp", "fd", fd)
+}
+
+func (s *Server) readLoop() {
+	for m := range s.msgs {
+		s.l.Error("server read msg", "msg", m)
+		switch v := m.(type) {
+		default:
+			s.l.Error("server got unknown msg", "msg", m)
+		case allocdoc:
+			s.openDoc(v.reply, v.name)
+		case allocfd:
+			s.allocFd(v.reply)
+		}
+	}
+}
+
 func (s *Server) configure() error {
 	m := negroni.New()
 	m.Use(negroni.HandlerFunc(func(w http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
-		log.Info("http request starting", "method", r.Method, "path", r.URL.Path, "hdrs", r.Header)
+		log.Info("server http response starting", "method", r.Method, "path", r.URL.Path, "hdrs", r.Header)
 		next(w, r)
-		log.Info("http request finished", "method", r.Method, "path", r.URL.Path, "hdrs", r.Header)
+		log.Info("server http response finished", "method", r.Method, "path", r.URL.Path, "hdrs", r.Header)
 	}))
 	m.Use(negroni.HandlerFunc(func(w http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
 		defer func() {
@@ -406,21 +223,19 @@ func (s *Server) configure() error {
 		}
 
 		c := &conn{
-			mu:    sync.Mutex{},
-			msgs:  make(chan interface{}),
-			ws:    ws,
-			descs: map[int]*desc{},
+			msgs: make(chan interface{}),
+			wg:   sync.WaitGroup{},
+			ws:   ws,
+			docs: map[int]chan interface{}{},
+			srvr: s.msgs,
 		}
+		c.l = log.New("conn", log.Lazy{
+			func() string {
+				return c.String()
+			},
+		})
 
-		defer s.closeConn(c)
-
-		s.addConn(c)
-
-		go s.readConn(c)
-
-		s.writeConn(c)
-
-		log.Info("server finished conn", "conn", c)
+		c.Run()
 	})
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -437,6 +252,8 @@ func (s *Server) configure() error {
 	m.UseHandler(mux)
 
 	s.m = m
+
+	go s.readLoop()
 
 	return nil
 }
