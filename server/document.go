@@ -32,7 +32,7 @@ func (d *doc) Run() {
 	d.wg.Wait()
 }
 
-func (d *doc) openDescription(conn chan interface{}) {
+func (d *doc) openDescription(dbgConn *conn, conn chan interface{}) {
 	d.l.Info("doc opening description", "conn", conn)
 
 	srvrReplyChan := make(chan allocfdresp)
@@ -50,22 +50,27 @@ func (d *doc) openDescription(conn chan interface{}) {
 	fd := srvrResp.fd
 
 	d.conns[fd] = conn
-	d.l.Info("doc got description; sending to conn", "fd", fd, "conn", conn)
+	d.l.Info("doc received description", "fd", fd)
 
-	conn <- openresp{
-		err:  nil,
-		doc:  d.msgs,
-		fd:   fd,
-		name: d.name,
+	m := openresp{
+		dbgConn: dbgConn,
+		err:     nil,
+		doc:     d.msgs,
+		fd:      fd,
+		name:    d.name,
 	}
+	d.l.Info("doc sending fd to conn", "action", "SEND", "cmd", m)
+	conn <- m
 
 	rev := len(d.hist)
-	d.l.Info("doc sending intial write", "fd", fd, "conn", conn, "rev", rev, "comp", d.comp)
-	conn <- write{
-		fd:  fd,
-		rev: rev,
-		ops: d.comp,
+	m2 := write{
+		dbgConn: dbgConn,
+		fd:      fd,
+		rev:     rev,
+		ops:     d.comp,
 	}
+	d.l.Info("doc sending initial write", "action", "SEND", "cmd", m2)
+	conn <- m2
 
 	d.l.Info("doc finished opening description", "conn", conn, "fd", fd)
 }
@@ -74,20 +79,30 @@ func (d *doc) readLoop() {
 	defer d.wg.Done()
 
 	for m := range d.msgs {
-		d.l.Info("doc read msg; processing", "msg", m)
+		d.l.Info("doc got msg", "action", "RECV", "cmd", m)
 		switch v := m.(type) {
 		default:
-			d.l.Error("doc read unknown message", "msg", v)
+			d.l.Error("doc read unknown message", "cmd", v)
 			panic("doc read unknown message")
 		case open:
-			d.openDescription(v.conn)
+			d.openDescription(v.dbgConn, v.conn)
 		case write:
 			conn, ok := d.conns[v.fd]
 			if !ok {
 				d.l.Error("doc got write with unknown fd, exiting")
 				panic("doc got write with unknown fd")
 			}
+			// if v.ops == nil {
+			// 	m := writeresp{
+			// 		fd:  v.fd,
+			// 		rev: len(d.hist),
+			// 	}
+			// 	d.l.Info("doc enqueueing FAKE WRITE_RESP", "action", "SEND", "cmd", m)
+			// 	d.conns[v.fd] <- m
+			// }
+			d.l.Info("doc transforming", "cmd", v)
 			rev, ops := d.transform(v.rev, v.ops)
+			d.l.Info("doc broadcasting", "cmd", v)
 			d.broadcast(conn, v.fd, rev, ops)
 		}
 	}
@@ -108,7 +123,7 @@ func (d *doc) transform(rev int, ops ot.Ops) (int, ot.Ops) {
 	for _, concurrentOp := range concurrentOps {
 		transformedOps, _ = ot.Transform(transformedOps, concurrentOp)
 	}
-	d.l.Info("doc got transformed ops", "cops", concurrentOps, "tops", transformedOps)
+	d.l.Info("doc transformed ops", "cops", concurrentOps, "tops", transformedOps)
 
 	d.hist = append(d.hist, transformedOps)
 
@@ -129,7 +144,7 @@ func (d *doc) broadcast(conn chan interface{}, fd int, rev int, ops ot.Ops) {
 				fd:  pfd,
 				rev: rev,
 			}
-			d.l.Info("doc enqueueing WRITE_RESP", "msg", m)
+			d.l.Info("doc enqueueing WRITE_RESP", "action", "SEND", "cmd", m)
 			pconn <- m
 		} else {
 			m := write{
@@ -137,7 +152,7 @@ func (d *doc) broadcast(conn chan interface{}, fd int, rev int, ops ot.Ops) {
 				rev: rev,
 				ops: ops,
 			}
-			d.l.Info("doc enqueueing WRITE", "msg", m)
+			d.l.Info("doc enqueueing WRITE", "action", "SEND", "cmd", m)
 			pconn <- m
 		}
 	}

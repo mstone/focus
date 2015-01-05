@@ -5,6 +5,7 @@
 package server
 
 import (
+	"fmt"
 	"github.com/unrolled/render"
 	"net/http"
 	"path"
@@ -26,29 +27,31 @@ type Config struct {
 }
 
 type Server struct {
-	m      *negroni.Negroni
-	l      log.Logger
-	msgs   chan interface{}
-	store  *store.Store
-	api    string
-	assets string
-	conns  map[*conn]struct{}
-	docs   map[*doc]struct{}
-	names  map[string]*doc
-	next   int
+	m        *negroni.Negroni
+	l        log.Logger
+	msgs     chan interface{}
+	store    *store.Store
+	api      string
+	assets   string
+	conns    map[*conn]struct{}
+	docs     map[*doc]struct{}
+	names    map[string]*doc
+	nextFd   int
+	nextConn int
 }
 
 func New(c Config) (*Server, error) {
 	s := &Server{
-		msgs:   make(chan interface{}),
-		l:      log.Root(),
-		store:  c.Store,
-		api:    c.API,
-		assets: c.Assets,
-		conns:  map[*conn]struct{}{},
-		docs:   map[*doc]struct{}{},
-		names:  map[string]*doc{},
-		next:   1,
+		msgs:     make(chan interface{}),
+		l:        log.Root(),
+		store:    c.Store,
+		api:      c.API,
+		assets:   c.Assets,
+		conns:    map[*conn]struct{}{},
+		docs:     map[*doc]struct{}{},
+		names:    map[string]*doc{},
+		nextFd:   0,
+		nextConn: 0,
 	}
 
 	err := s.configure()
@@ -81,11 +84,10 @@ func (s *Server) openDoc(w chan allocdocresp, name string) {
 			hist:  []ot.Ops{},
 			comp:  ot.Ops{},
 		}
-		d.l = log.New("doc", log.Lazy{
-			func() string {
-				return d.String()
-			},
-		})
+		d.l = log.New(
+			"obj", "doc",
+			"doc", log.Lazy{d.String},
+		)
 		s.names[name] = d
 		go d.Run()
 	}
@@ -128,15 +130,29 @@ type allocdocresp struct {
 
 // processed by doc for conn
 type open struct {
-	conn chan interface{}
-	name string
+	dbgConn *conn
+	conn    chan interface{}
+	name    string
+}
+
+func (o open) String() string {
+	return fmt.Sprintf("open{conn: %s, name: %s}", o.dbgConn, o.name)
 }
 
 type openresp struct {
-	err  error
-	doc  chan interface{}
-	name string
-	fd   int
+	err     error
+	dbgConn *conn
+	doc     chan interface{}
+	name    string
+	fd      int
+}
+
+func (o openresp) String() string {
+	errstr := "nil"
+	if o.err != nil {
+		errstr = o.err.Error()
+	}
+	return fmt.Sprintf("openresp{conn: %s, doc: <>, name: %s, fd: %d, err: %s}", o.dbgConn, o.name, o.fd, errstr)
 }
 
 // processed by Server for doc
@@ -149,20 +165,40 @@ type allocfdresp struct {
 	fd  int
 }
 
+// processed by Server for server
+type allocconn struct {
+	reply chan allocconnresp
+}
+
+type allocconnresp struct {
+	err error
+	no  int
+}
+
 type writeresp struct {
-	fd  int
-	rev int
+	dbgConn *conn
+	fd      int
+	rev     int
+}
+
+func (w writeresp) String() string {
+	return fmt.Sprintf("writeresp{conn: %s, fd: %d, rev: %d}", w.dbgConn, w.fd, w.rev)
 }
 
 type write struct {
-	fd  int
-	rev int
-	ops ot.Ops
+	dbgConn *conn
+	fd      int
+	rev     int
+	ops     ot.Ops
+}
+
+func (w write) String() string {
+	return fmt.Sprintf("write{conn: %s, fd: %d, rev: %d, ops: %s}", w.dbgConn, w.fd, w.rev, w.ops)
 }
 
 func (s *Server) allocFd(reply chan allocfdresp) {
-	fd := s.next
-	s.next++
+	fd := s.nextFd
+	s.nextFd++
 	s.l.Info("server allocating fd", "fd", fd)
 	reply <- allocfdresp{
 		err: nil,
@@ -171,16 +207,29 @@ func (s *Server) allocFd(reply chan allocfdresp) {
 	s.l.Info("server sent allocfdresp", "fd", fd)
 }
 
+func (s *Server) allocConn(reply chan allocconnresp) {
+	no := s.nextConn
+	s.nextConn++
+	s.l.Info("server allocating conn", "conn", no)
+	reply <- allocconnresp{
+		err: nil,
+		no:  no,
+	}
+	s.l.Info("server sent allocconnresp", "conn", no)
+}
+
 func (s *Server) readLoop() {
 	for m := range s.msgs {
-		s.l.Error("server read msg", "msg", m)
+		s.l.Info("server read msg", "cmd", m)
 		switch v := m.(type) {
 		default:
-			s.l.Error("server got unknown msg", "msg", m)
+			s.l.Error("server got unknown msg", "cmd", m)
 		case allocdoc:
 			s.openDoc(v.reply, v.name)
 		case allocfd:
 			s.allocFd(v.reply)
+		case allocconn:
+			s.allocConn(v.reply)
 		}
 	}
 }
@@ -188,9 +237,9 @@ func (s *Server) readLoop() {
 func (s *Server) configure() error {
 	m := negroni.New()
 	m.Use(negroni.HandlerFunc(func(w http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
-		log.Info("server http response starting", "method", r.Method, "path", r.URL.Path, "hdrs", r.Header)
+		log.Info("server http response starting", "obj", "server", "method", r.Method, "path", r.URL.Path, "hdrs", r.Header)
 		next(w, r)
-		log.Info("server http response finished", "method", r.Method, "path", r.URL.Path, "hdrs", r.Header)
+		log.Info("server http response finished", "obj", "server", "method", r.Method, "path", r.URL.Path, "hdrs", r.Header)
 	}))
 	m.Use(negroni.HandlerFunc(func(w http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
 		defer func() {
@@ -215,31 +264,45 @@ func (s *Server) configure() error {
 	}
 
 	mux.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
-		log.Info("server starting websocket", "remoteaddr", r.RemoteAddr, "hdrs", r.Header)
+		log.Info("server starting websocket", "obj", "server", "remoteaddr", r.RemoteAddr, "hdrs", r.Header)
 		ws, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
 			log.Error("server unable to upgrade incoming websocket connection", "err", err)
 			return
 		}
 
-		c := &conn{
-			msgs: make(chan interface{}),
-			wg:   sync.WaitGroup{},
-			ws:   ws,
-			docs: map[int]chan interface{}{},
-			srvr: s.msgs,
+		srvrReplyChan := make(chan allocconnresp)
+		s.msgs <- allocconn{srvrReplyChan}
+		srvrResp := <-srvrReplyChan
+		if srvrResp.err != nil {
+			log.Error("server unable to allocate new conn no", "err", err)
+			return
 		}
-		c.l = log.New("conn", log.Lazy{
-			func() string {
-				return c.String()
-			},
-		})
+
+		c := &conn{
+			msgs:    make(chan interface{}),
+			no:      srvrResp.no,
+			numSend: 0,
+			numRecv: 0,
+			wg:      sync.WaitGroup{},
+			ws:      ws,
+			docs:    map[int]chan interface{}{},
+			srvr:    s.msgs,
+		}
+		c.l = log.New(
+			"obj", "conn",
+			"conn", log.Lazy{c.String},
+			// "numSend", log.Lazy{func() int { return c.numSend }},
+			// "numRecv", log.Lazy{func() int { return c.numRecv }},
+			// "total", log.Lazy{func() int { return c.numSend + c.numRecv }},
+		)
 
 		c.Run()
+		log.Info("server finished websocket", "obj", "server", "remoteaddr", r.RemoteAddr, "hdrs", r.Header)
 	})
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		log.Info("server offering pad", "pad", r.URL.Path)
+		log.Info("server offering pad", "obj", "server", "pad", r.URL.Path)
 		v := struct {
 			API, Name string
 		}{

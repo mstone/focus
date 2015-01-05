@@ -35,6 +35,7 @@ type State interface {
 	Client(c Client, ops Ops) State
 	Server(c Client, rev int, ops Ops) State
 	Ack(c Client, rev int) State
+	String() string
 }
 
 type Client interface {
@@ -46,6 +47,10 @@ type Client interface {
 type Synchronized struct{}
 
 var synchronized = &Synchronized{}
+
+func (s *Synchronized) String() string {
+	return "Synchronized{}"
+}
 
 func (s *Synchronized) Client(c Client, ops Ops) State {
 	c.Send(ops)
@@ -65,6 +70,10 @@ func (s *Synchronized) Ack(c Client, rev int) State {
 
 type Waiting struct {
 	inflight Ops
+}
+
+func (w *Waiting) String() string {
+	return fmt.Sprintf("Waiting{inflight: %s}", w.inflight)
 }
 
 func (w *Waiting) Client(c Client, ops Ops) State {
@@ -90,6 +99,10 @@ func (w *Waiting) Ack(c Client, rev int) State {
 type Buffering struct {
 	inflight Ops
 	waiting  Ops
+}
+
+func (b *Buffering) String() string {
+	return fmt.Sprintf("Buffering{inflight: %s, waiting: %s}", b.inflight, b.waiting)
 }
 
 func (b *Buffering) Client(c Client, ops Ops) State {

@@ -17,6 +17,21 @@ const (
 	C_WRITE_RESP
 )
 
+func (c Cmd) String() string {
+	switch c {
+	case C_OPEN:
+		return "OPEN"
+	case C_OPEN_RESP:
+		return "OPEN_RESP"
+	case C_WRITE:
+		return "WRITE"
+	case C_WRITE_RESP:
+		return "WRITE_RESP"
+	default:
+		panic("unknown cmd type")
+	}
+}
+
 type Msg struct {
 	Cmd  Cmd
 	Name string `json:",omitempty"`

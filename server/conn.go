@@ -14,16 +14,22 @@ import (
 
 // struct conn represents an open WebSocket connection.
 type conn struct {
-	msgs chan interface{}
-	l    log.Logger
-	wg   sync.WaitGroup
-	ws   *websocket.Conn
-	docs map[int]chan interface{}
-	srvr chan interface{}
+	msgs    chan interface{}
+	l       log.Logger
+	no      int
+	numSend int
+	numRecv int
+	wg      sync.WaitGroup
+	ws      *websocket.Conn
+	docs    map[int]chan interface{}
+	srvr    chan interface{}
 }
 
 func (c *conn) String() string {
-	return fmt.Sprintf("%p", c)
+	if c == nil {
+		return "nil"
+	}
+	return fmt.Sprintf("{c%d}", c.no)
 }
 
 func (c *conn) Run() {
@@ -32,7 +38,7 @@ func (c *conn) Run() {
 	go c.writeLoop()
 	c.wg.Wait()
 
-	c.l.Info("conn finished")
+	c.l.Info("conn done; disconnecting client")
 }
 
 func (c *conn) Close() error {
@@ -53,10 +59,10 @@ func (c *conn) readLoop() {
 
 		switch m.Cmd {
 		default:
-			c.l.Error("conn got unknown cmd; exiting", "msg", m)
+			c.l.Error("conn got unknown cmd; exiting", "cmd", m)
 			return
 		case msg.C_OPEN:
-			c.l.Info("conn got OPEN, sending allocdoc", "msg", m)
+			c.l.Info("conn got OPEN, sending allocdoc", "cmd", m)
 			srvrReplyChan := make(chan allocdocresp)
 			c.srvr <- allocdoc{
 				reply: srvrReplyChan,
@@ -69,28 +75,32 @@ func (c *conn) readLoop() {
 				panic("conn unable to allocdoc")
 			}
 
-			c.l.Info("conn finished allocdoc, sending open", "msg", m)
+			c.l.Info("conn finished allocdoc, sending open", "cmd", m)
 
 			doc := srvrResp.doc
 			doc <- open{
-				conn: c.msgs,
+				dbgConn: c,
+				conn:    c.msgs,
+				name:    m.Name,
 			}
-			c.l.Info("conn finished OPEN", "msg", m)
+			c.l.Info("conn finished OPEN", "cmd", m)
 		case msg.C_WRITE:
-			c.l.Info("conn got WRITE", "msg", m)
+			c.l.Info("conn got WRITE", "cmd", m)
 			doc, ok := c.docs[m.Fd]
 			if !ok {
 				c.l.Error("conn got WRITE with bad fd, exiting")
 				panic("conn got WRITE with bad fd")
 			}
-			c.l.Info("conn enqueuing write for doc", "msg", m, "doc", doc)
+			c.l.Info("conn enqueuing write for doc", "cmd", m, "doc", doc)
 			doc <- write{
-				fd:  m.Fd,
-				rev: m.Rev,
-				ops: m.Ops,
+				dbgConn: c,
+				fd:      m.Fd,
+				rev:     m.Rev,
+				ops:     m.Ops,
 			}
-			c.l.Info("conn finished WRITE", "msg", m)
+			c.l.Info("conn finished WRITE", "cmd", m)
 		}
+		c.numRecv++
 	}
 }
 
@@ -98,8 +108,7 @@ func (c *conn) writeLoop() {
 	defer c.wg.Done()
 
 	for m := range c.msgs {
-		c.l.Info("conn read internal msg", "msgtype", reflect.TypeOf(m).Name(), "msg", m)
-		c.l.Info("server writing "+strings.ToUpper(reflect.TypeOf(m).Name()), "msg", m)
+		c.l.Info("server writing "+strings.ToUpper(reflect.TypeOf(m).Name()), "cmd", m.(fmt.Stringer).String())
 		switch v := m.(type) {
 		case openresp:
 			c.docs[v.fd] = v.doc
@@ -122,5 +131,6 @@ func (c *conn) writeLoop() {
 				Ops: v.ops,
 			})
 		}
+		c.numSend++
 	}
 }
