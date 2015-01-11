@@ -106,8 +106,10 @@ func (b *Buffering) String() string {
 }
 
 func (b *Buffering) Client(c Client, ops Ops) State {
-	b.waiting = Compose(b.waiting, ops)
-	return b
+	return &Buffering{
+		inflight: b.inflight,
+		waiting:  Compose(b.waiting, ops),
+	}
 }
 
 func (b *Buffering) Server(c Client, rev int, ops Ops) State {

@@ -6,6 +6,7 @@ import (
 
 	log "gopkg.in/inconshreveable/log15.v2"
 
+	"github.com/mstone/focus/msg"
 	"github.com/mstone/focus/ot"
 )
 
@@ -23,6 +24,12 @@ type doc struct {
 
 func (d *doc) String() string {
 	return fmt.Sprintf("{%s}", d.name)
+}
+
+func (d *doc) Body() string {
+	doc := ot.NewDoc()
+	doc.Apply(d.comp)
+	return doc.String()
 }
 
 func (d *doc) Run() {
@@ -75,11 +82,32 @@ func (d *doc) openDescription(dbgConn *conn, conn chan interface{}) {
 	d.l.Info("doc finished opening description", "conn", conn, "fd", fd)
 }
 
+func unpackMsg(m interface{}, b ...interface{}) []interface{} {
+	switch v := m.(type) {
+	case open:
+		return append(b, "cmd", "open", "conn", v.dbgConn.String(), "name", v.name)
+	case write:
+		return append(b, "cmd", "write", "conn", v.dbgConn.String(), "fd", v.fd, "rev", v.rev, "ops", v.ops)
+	case writeresp:
+		return append(b, "cmd", "writeresp", "conn", v.dbgConn.String(), "fd", v.fd, "rev", v.rev)
+	case msg.Msg:
+		switch v.Cmd {
+		case msg.C_WRITE_RESP:
+			return append(b, "cmd", "WRITE_RESP", "fd", v.Fd, "rev", v.Rev)
+		case msg.C_WRITE:
+			return append(b, "cmd", "WRITE", "fd", v.Fd, "rev", v.Rev, "ops", v.Ops)
+		}
+	}
+	return append(b, "cmd", m)
+}
+
 func (d *doc) readLoop() {
 	defer d.wg.Done()
 
 	for m := range d.msgs {
-		d.l.Info("doc got msg", "action", "RECV", "cmd", m)
+		// d.l.Info("doc got msg", "action", "RECV", "cmd", m)
+		args := unpackMsg(m, "action", "RECV")
+		d.l.Info("doc got msg", args...)
 		switch v := m.(type) {
 		default:
 			d.l.Error("doc read unknown message", "cmd", v)
@@ -118,21 +146,26 @@ func (d *doc) transform(rev int, ops ot.Ops) (int, ot.Ops) {
 	}
 	d.l.Info("doc found concurrent ops-lists", "num", len(concurrentOps), "val", concurrentOps)
 
-	// produce transformed ops
-	transformedOps := ops
+	// compose concurrent ops
+	composedOps := ot.Ops{}
 	for _, concurrentOp := range concurrentOps {
-		transformedOps, _ = ot.Transform(transformedOps, concurrentOp)
+		composedOps = ot.Compose(composedOps, concurrentOp)
 	}
-	d.l.Info("doc transformed ops", "cops", concurrentOps, "tops", transformedOps)
+	d.l.Info("doc composed concurrent ops", "num", len(composedOps), "val", composedOps)
+
+	// produce transformed ops
+	transformedOps, _ := ot.Transform(ops, composedOps)
+	d.l.Info("doc transformed ops", "action", "XFRM", "ops", ops, "cops", composedOps, "tops", transformedOps)
 
 	d.hist = append(d.hist, transformedOps)
 
 	// update composed ops for new conns
 	prev := d.comp
 	d.comp = ot.Compose(d.comp, transformedOps)
-	d.l.Info("doc composed transformed ops", "prev", prev, "comp", d.comp)
+	d.l.Info("doc composed transformed ops", "action", "COMP", "prev", prev, "comp", d.comp)
 
 	rev = len(d.hist)
+	d.l.Info("doc state", "action", "STAT", "rev", rev, "comp", d.comp, "hist", d.hist, "body", d.Body())
 
 	return rev, transformedOps
 }

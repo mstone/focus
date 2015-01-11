@@ -34,7 +34,6 @@ type Server struct {
 	api      string
 	assets   string
 	conns    map[*conn]struct{}
-	docs     map[*doc]struct{}
 	names    map[string]*doc
 	nextFd   int
 	nextConn int
@@ -48,7 +47,6 @@ func New(c Config) (*Server, error) {
 		api:      c.API,
 		assets:   c.Assets,
 		conns:    map[*conn]struct{}{},
-		docs:     map[*doc]struct{}{},
 		names:    map[string]*doc{},
 		nextFd:   0,
 		nextConn: 0,

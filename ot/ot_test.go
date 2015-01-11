@@ -192,6 +192,7 @@ type ComposeCase struct {
 
 func doComposeTable(t *testing.T, cases []ComposeCase) {
 	for idx, c := range cases {
+		t.Logf("compose %d, composing A[0]: %s, A[1]: %s, expecting B: %s", idx, c.A[0], c.A[1], c.B)
 		a := Compose(c.A[0], c.A[1])
 		if !reflect.DeepEqual(a, c.B) {
 			t.Errorf("compose %d failed; %s -> %s != expected %s", idx, c.A, a, c.B)
@@ -203,10 +204,17 @@ func TestCompose(t *testing.T) {
 	table := []ComposeCase{
 		ComposeCase{
 			A: [2]Ops{
-				Ops{Op{0, []rune{'a'}}},
-				Ops{Op{1, nil}, Op{0, []rune{'b'}}},
+				Ops{
+					Op{0, []rune{'a'}},
+				},
+				Ops{
+					Op{1, nil},
+					Op{0, []rune{'b'}},
+				},
 			},
-			B: Ops{Op{0, []rune{'a', 'b'}}},
+			B: Ops{
+				Op{0, []rune{'a', 'b'}},
+			},
 		},
 		ComposeCase{
 			A: [2]Ops{
@@ -214,6 +222,51 @@ func TestCompose(t *testing.T) {
 				Ops{Op{-1, nil}},
 			},
 			B: Ops{},
+		},
+		ComposeCase{
+			A: [2]Ops{
+				Ops{
+					Op{0, []rune{'e', 'x'}},
+				},
+				Ops{
+					Op{2, nil},
+					Op{0, []rune{'4'}},
+				},
+			},
+			B: Ops{
+				Op{0, []rune{'e', 'x', '4'}},
+			},
+		},
+		ComposeCase{
+			A: [2]Ops{
+				Ops{
+					Op{0, []rune{'x'}},
+				},
+				Ops{
+					Op{1, nil},
+					Op{0, []rune{'4'}},
+				},
+			},
+			B: Ops{
+				Op{0, []rune{'x', '4'}},
+			},
+		},
+		ComposeCase{
+			A: [2]Ops{
+				Ops{
+					Op{0, []rune{'e', 'x'}},
+					Op{0, nil},
+				},
+				Ops{
+					Op{1, nil},
+					Op{0, []rune{'4'}},
+					Op{1, nil},
+				},
+			},
+			B: Ops{
+				Op{0, []rune{'e', '4', 'x'}},
+				Op{0, nil},
+			},
 		},
 	}
 

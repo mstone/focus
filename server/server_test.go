@@ -190,19 +190,24 @@ func (c *client) sendRandomOps() {
 			}
 			switch op {
 			case 0:
-				s := fmt.Sprintf("%x", fc.Intn(4096))
+				// s := fmt.Sprintf("%x", fc.Intn(4096))
+				s := fmt.Sprintf("%x", fc.Intn(16))
 				pos := 0
 				if size > 0 {
 					pos = fc.Intn(size)
 				}
 				*p = ot.NewInsert(size, pos, s)
 			case 1:
-				d := fc.Intn(size - 1)
-				pos := 0
-				if size > 0 {
-					pos = fc.Intn(size - d)
+				if size == 1 {
+					*p = ot.NewDelete(1, 0, 1)
+				} else {
+					d := fc.Intn(size)
+					pos := 0
+					if size-d > 0 {
+						pos = fc.Intn(size - d)
+					}
+					*p = ot.NewDelete(size, pos, d)
 				}
-				*p = ot.NewDelete(size, pos, d)
 			}
 		},
 	)
@@ -232,16 +237,17 @@ func (c *client) Send(ops ot.Ops) {
 }
 
 func (c *client) String() string {
-	return fmt.Sprintf("{%s}", c.clname)
+	return fmt.Sprintf("%s", c.clname)
 }
 
 func (c *client) Recv(rev int, ops ot.Ops) {
 	c.l.Info("client recv", "rev", rev, "ops", ops)
 	pdoc := c.doc.String()
+	prev := c.rev
 	c.doc.Apply(ops)
+	c.rev = rev
 	ndoc := c.doc.String()
-	c.l.Info("client recv done", "fd", c.fd, "prev", pdoc, "next", ndoc)
-	c.l.Info("client STATUS update", "action", "STAT", "doc", c.doc.String())
+	c.l.Info("client recv done", "action", "STAT", "fd", c.fd, "pdoc", pdoc, "ndoc", ndoc, "prev", prev, "nrev", c.rev, "pstate", c.st)
 }
 
 func (c *client) Ack(rev int) {
@@ -252,7 +258,8 @@ func (c *client) onWriteResp(m msg.Msg) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	c.l.Info("client got WRITE_RESP", "action", "RECV", "cmd", m)
+	args := unpackMsg(m, "action", "RECV")
+	c.l.Info("client got WRITE_RESP", args...)
 	c.st = c.st.Ack(c, m.Rev)
 }
 
@@ -260,7 +267,8 @@ func (c *client) onWrite(m msg.Msg) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	c.l.Info("client got WRITE", "action", "RECV", "cmd", m)
+	args := unpackMsg(m, "action", "RECV")
+	c.l.Info("client got WRITE", args...)
 	c.st = c.st.Server(c, m.Rev, m.Ops)
 }
 
@@ -271,7 +279,7 @@ func (c *client) writeLoop() {
 		c.sendRandomOps()
 	}
 
-	c.l.Info("client finished writeLoop")
+	c.l.Info("client finished writeLoop", "action", "STAT", "rev", c.rev, "body", c.doc.String(), "state", c.st)
 }
 
 func (c *client) readLoop() {
@@ -295,7 +303,7 @@ Loop:
 		}
 		c.numRecv++
 	}
-	c.l.Info("client finished readLoop")
+	c.l.Info("client finished readLoop", "action", "STAT", "rev", c.rev, "body", c.doc.String(), "state", c.st)
 }
 
 const numClients = 2
@@ -324,7 +332,7 @@ func TestRandom(t *testing.T) {
 		c := &client{
 			mu:     sync.Mutex{},
 			wg:     cwg,
-			clname: fmt.Sprintf("c:%d", idx),
+			clname: fmt.Sprintf("%d", idx),
 			name:   vpName,
 			rev:    0,
 			doc:    ot.NewDoc(),
@@ -416,11 +424,20 @@ func TestRandom(t *testing.T) {
 	}
 	wg.Wait()
 
-	for i := 1; i < numClients; i++ {
-		s1 := clients[0].doc.String()
-		s2 := clients[i].doc.String()
-		if s1 != s2 {
-			t.Errorf("error, doc[0] != doc[%d]\n\t%q\n\t%q", i, s1, s2)
+	d := focusSrv.names["/"]
+	d.l.Info("server doc final state", "action", "STAT", "rev", len(d.hist), "comp", d.comp, "hist", d.hist, "body", d.Body())
+	t.Logf("server doc: %s", d.String())
+	sd := d.Body()
+	for i := 0; i < numClients; i++ {
+		s1 := clients[i].doc.String()
+		if sd != s1 {
+			t.Errorf("error, doc[%d] != server doc\n\t%q\n\t%q", i, s1, sd)
+		}
+		for j := i + 1; j < numClients; j++ {
+			s2 := clients[j].doc.String()
+			if s1 != s2 {
+				t.Errorf("error, doc[%d] != doc[%d]\n\t%q\n\t%q", i, j, s1, s2)
+			}
 		}
 	}
 }

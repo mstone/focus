@@ -65,6 +65,7 @@ func (o *Op) IsInsert() bool {
 		return false
 	}
 	return o.Size == 0
+	// return o.Size == 0 && len(o.Body) > 0
 }
 
 func (o *Op) Len() int {
@@ -136,7 +137,11 @@ func (os *Ops) Insert(body []rune) {
 	case len(body) == 0:
 		break
 	case olen > 0 && os.Last().IsInsert():
-		ops.Last().Body = append(ops.Last().Body, body...)
+		last := ops.Last()
+		prevLastBody := last.Body
+		last.Body = make([]rune, len(prevLastBody)+len(body))
+		copy(last.Body, prevLastBody)
+		copy(last.Body[len(prevLastBody):], body)
 	case olen > 0 && os.Last().IsDelete():
 		if olen > 1 && ops[olen-2].IsInsert() {
 			ops[olen-2].Body = append(ops[olen-2].Body, body...)
@@ -237,11 +242,13 @@ func shortenOps(a *Op, b *Op) (*Op, *Op) {
 }
 
 func Compose(as, bs Ops) Ops {
-	if len(as) == 0 {
-		return bs
-	}
-
 	ops := Ops{}
+
+	if len(as) == 0 {
+		ops := make(Ops, len(bs))
+		copy(ops, bs)
+		return ops
+	}
 
 Fix:
 	for {
