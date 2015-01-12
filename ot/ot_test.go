@@ -272,3 +272,125 @@ func TestCompose(t *testing.T) {
 
 	doComposeTable(t, table)
 }
+
+type InsertCase struct {
+	A Ops
+	B []rune
+	C Ops
+}
+
+func doInsertTable(t *testing.T, cases []InsertCase) {
+	for idx, c := range cases {
+		t.Logf("insert %d, inserting A: %s, B: %s, expecting C: %s", idx, c.A, AsString(c.B), c.C)
+		a := c.A.Clone()
+		a.Insert(c.B)
+		if !reflect.DeepEqual(a, c.C) {
+			t.Errorf("insert %d failed;\n\tA: %s\n\ta: %s\n\tB:\n\tC: %s", idx, c.A, a, c.B, c.C)
+		}
+	}
+}
+
+func TestInsert(t *testing.T) {
+	table := []InsertCase{
+		InsertCase{
+			A: Ops{},
+			B: AsRuneSlice("a"),
+			C: Ops{
+				Op{
+					Size: 0,
+					Body: AsRuneSlice("a"),
+				},
+			},
+		},
+		InsertCase{
+			A: Ops{
+				Op{
+					Size: 0,
+					Body: AsRuneSlice("a"),
+				},
+			},
+			B: AsRuneSlice("b"),
+			C: Ops{
+				Op{
+					Size: 0,
+					Body: AsRuneSlice("ab"),
+				},
+			},
+		},
+		InsertCase{
+			A: Ops{
+				Op{
+					Size: 0,
+					Body: AsRuneSlice("a"),
+				},
+				Op{
+					Size: -2,
+					Body: nil,
+				},
+			},
+			B: AsRuneSlice("b"),
+			C: Ops{
+				Op{
+					Size: 0,
+					Body: AsRuneSlice("ab"),
+				},
+				Op{
+					Size: -2,
+					Body: nil,
+				},
+			},
+		},
+		InsertCase{
+			A: Ops{
+				Op{
+					Size: -2,
+					Body: nil,
+				},
+			},
+			B: AsRuneSlice("a"),
+			C: Ops{
+				Op{
+					Size: 0,
+					Body: AsRuneSlice("a"),
+				},
+				Op{
+					Size: -2,
+					Body: nil,
+				},
+			},
+		},
+	}
+
+	doInsertTable(t, table)
+}
+
+type TransformCase struct {
+	A, B, C, D Ops
+}
+
+func doTransformTable(t *testing.T, cases []TransformCase) {
+	for idx, c := range cases {
+		t.Logf("transform %d, transforming A: %s, B: %s, expecting C: %s, D: %s", idx, c.A, c.B, c.C, c.D)
+		x, y := Transform(c.A, c.B)
+		if !reflect.DeepEqual(x, c.C) {
+			t.Errorf("transform %d failed;\n\tA: %s\n\tB: %s\n\tC: %s\n\tD: %s\n\tx: %s\n\ty: %s", idx, c.A, c.B, c.C, c.D, x, y)
+		}
+		if !reflect.DeepEqual(y, c.D) {
+			t.Errorf("transform %d failed;\n\tA: %s\n\tB: %s\n\tC: %s\n\tD: %s\n\tx: %s\n\ty: %s", idx, c.A, c.B, c.C, c.D, x, y)
+		}
+	}
+}
+
+func TestTransform(t *testing.T) {
+	table := []TransformCase{
+		// xy     x5y
+		// xby    x5by
+		TransformCase{
+			A: Ops{Op{1, nil}, Op{0, AsRuneSlice("5")}, Op{1, nil}},
+			B: Ops{Op{1, nil}, Op{0, AsRuneSlice("b")}, Op{1, nil}},
+			C: Ops{Op{1, nil}, Op{0, AsRuneSlice("5")}, Op{2, nil}},
+			D: Ops{Op{2, nil}, Op{0, AsRuneSlice("b")}, Op{1, nil}},
+		},
+	}
+	doTransformTable(t, table)
+}

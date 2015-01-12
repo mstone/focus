@@ -10,6 +10,11 @@ import (
 	"github.com/mstone/focus/ot"
 )
 
+type dconn struct {
+	conn    chan interface{}
+	dbgConn *conn
+}
+
 // struct doc represents a vaporpad (like a file)
 type doc struct {
 	msgs  chan interface{}
@@ -17,7 +22,7 @@ type doc struct {
 	l     log.Logger
 	wg    sync.WaitGroup
 	name  string
-	conns map[int]chan interface{}
+	conns map[int]dconn
 	hist  []ot.Ops
 	comp  ot.Ops
 }
@@ -56,7 +61,7 @@ func (d *doc) openDescription(dbgConn *conn, conn chan interface{}) {
 
 	fd := srvrResp.fd
 
-	d.conns[fd] = conn
+	d.conns[fd] = dconn{conn, dbgConn}
 	d.l.Info("doc received description", "fd", fd)
 
 	m := openresp{
@@ -66,7 +71,8 @@ func (d *doc) openDescription(dbgConn *conn, conn chan interface{}) {
 		fd:      fd,
 		name:    d.name,
 	}
-	d.l.Info("doc sending fd to conn", "action", "SEND", "cmd", m)
+	args := unpackMsg(m, "action", "SEND")
+	d.l.Info("doc sending fd to conn", args...)
 	conn <- m
 
 	rev := len(d.hist)
@@ -76,7 +82,8 @@ func (d *doc) openDescription(dbgConn *conn, conn chan interface{}) {
 		rev:     rev,
 		ops:     d.comp,
 	}
-	d.l.Info("doc sending initial write", "action", "SEND", "cmd", m2)
+	args2 := unpackMsg(m2, "action", "SEND")
+	d.l.Info("doc sending initial write", args2...)
 	conn <- m2
 
 	d.l.Info("doc finished opening description", "conn", conn, "fd", fd)
@@ -86,6 +93,8 @@ func unpackMsg(m interface{}, b ...interface{}) []interface{} {
 	switch v := m.(type) {
 	case open:
 		return append(b, "cmd", "open", "conn", v.dbgConn.String(), "name", v.name)
+	case openresp:
+		return append(b, "cmd", "openresp", "conn", v.dbgConn.String(), "name", v.name, "fd", v.fd, "err", v.err)
 	case write:
 		return append(b, "cmd", "write", "conn", v.dbgConn.String(), "fd", v.fd, "rev", v.rev, "ops", v.ops)
 	case writeresp:
@@ -96,6 +105,10 @@ func unpackMsg(m interface{}, b ...interface{}) []interface{} {
 			return append(b, "cmd", "WRITE_RESP", "fd", v.Fd, "rev", v.Rev)
 		case msg.C_WRITE:
 			return append(b, "cmd", "WRITE", "fd", v.Fd, "rev", v.Rev, "ops", v.Ops)
+		case msg.C_OPEN:
+			return append(b, "cmd", "OPEN", "name", v.Name)
+		case msg.C_OPEN_RESP:
+			return append(b, "cmd", "OPEN_RESP", "name", v.Name, "fd", v.Fd)
 		}
 	}
 	return append(b, "cmd", m)
@@ -120,14 +133,6 @@ func (d *doc) readLoop() {
 				d.l.Error("doc got write with unknown fd, exiting")
 				panic("doc got write with unknown fd")
 			}
-			// if v.ops == nil {
-			// 	m := writeresp{
-			// 		fd:  v.fd,
-			// 		rev: len(d.hist),
-			// 	}
-			// 	d.l.Info("doc enqueueing FAKE WRITE_RESP", "action", "SEND", "cmd", m)
-			// 	d.conns[v.fd] <- m
-			// }
 			d.l.Info("doc transforming", "cmd", v)
 			rev, ops := d.transform(v.rev, v.ops)
 			d.l.Info("doc broadcasting", "cmd", v)
@@ -170,23 +175,27 @@ func (d *doc) transform(rev int, ops ot.Ops) (int, ot.Ops) {
 	return rev, transformedOps
 }
 
-func (d *doc) broadcast(conn chan interface{}, fd int, rev int, ops ot.Ops) {
-	send := func(pfd int, pconn chan interface{}) {
+func (d *doc) broadcast(conn dconn, fd int, rev int, ops ot.Ops) {
+	send := func(pfd int, pconn dconn) {
 		if pconn == conn {
 			m := writeresp{
-				fd:  pfd,
-				rev: rev,
+				dbgConn: pconn.dbgConn,
+				fd:      pfd,
+				rev:     rev,
 			}
-			d.l.Info("doc enqueueing WRITE_RESP", "action", "SEND", "cmd", m)
-			pconn <- m
+			args := unpackMsg(m, "action", "SEND")
+			d.l.Info("doc enqueueing WRITE_RESP", args...)
+			pconn.conn <- m
 		} else {
 			m := write{
-				fd:  pfd,
-				rev: rev,
-				ops: ops,
+				dbgConn: pconn.dbgConn,
+				fd:      pfd,
+				rev:     rev,
+				ops:     ops,
 			}
-			d.l.Info("doc enqueueing WRITE", "action", "SEND", "cmd", m)
-			pconn <- m
+			args := unpackMsg(m, "action", "SEND")
+			d.l.Info("doc enqueueing WRITE", args...)
+			pconn.conn <- m
 		}
 	}
 

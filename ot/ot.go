@@ -34,6 +34,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"unicode/utf8"
 )
 
 type Tag int
@@ -44,6 +45,18 @@ type Op struct {
 
 	// Body is the text to be inserted
 	Body []rune
+}
+
+func (o Op) Clone() Op {
+	var body2 []rune
+	if len(o.Body) > 0 {
+		body2 = make([]rune, len(o.Body))
+		copy(body2, o.Body)
+	}
+	return Op{
+		Size: o.Size,
+		Body: body2,
+	}
 }
 
 func (o *Op) IsRetain() bool {
@@ -81,6 +94,14 @@ func (o *Op) Len() int {
 	}
 }
 
+func AsRuneSlice(s string) []rune {
+	rs := make([]rune, utf8.RuneCountInString(s))
+	for i, r := range s {
+		rs[i] = r
+	}
+	return rs
+}
+
 func AsString(rs []rune) string {
 	buf := bytes.Buffer{}
 	for _, r := range rs {
@@ -106,6 +127,14 @@ func (o *Op) String() string {
 
 type Ops []Op
 
+func (os Ops) Clone() Ops {
+	os2 := make(Ops, len(os))
+	for i, op := range os {
+		os2[i] = op.Clone()
+	}
+	return os2
+}
+
 func (os Ops) String() string {
 	if len(os) > 0 {
 		strs := []string{}
@@ -130,6 +159,31 @@ func (os Ops) Rest() Ops {
 	return os[1:]
 }
 
+func (op *Op) extendBody(rhs []rune) {
+	lhs := op.Body
+	op.Body = make([]rune, len(lhs)+len(rhs))
+	copy(op.Body, lhs)
+	copy(op.Body[len(lhs):], rhs)
+}
+
+func (os *Ops) insertPenultimate(op Op) {
+	rhs := *os
+	rlen := len(rhs)
+	lhs := make(Ops, rlen+1)
+	copy(lhs, rhs[:rlen-1])
+	lhs[rlen-1] = op
+	lhs[rlen] = rhs[rlen-1]
+	*os = lhs
+}
+
+func (os *Ops) insertUltimate(op Op) {
+	rhs := *os
+	lhs := make(Ops, len(rhs))
+	copy(lhs, rhs)
+	lhs = append(lhs, op)
+	*os = lhs
+}
+
 func (os *Ops) Insert(body []rune) {
 	ops := *os
 	olen := len(ops)
@@ -137,19 +191,15 @@ func (os *Ops) Insert(body []rune) {
 	case len(body) == 0:
 		break
 	case olen > 0 && os.Last().IsInsert():
-		last := ops.Last()
-		prevLastBody := last.Body
-		last.Body = make([]rune, len(prevLastBody)+len(body))
-		copy(last.Body, prevLastBody)
-		copy(last.Body[len(prevLastBody):], body)
+		ops.Last().extendBody(body)
 	case olen > 0 && os.Last().IsDelete():
 		if olen > 1 && ops[olen-2].IsInsert() {
-			ops[olen-2].Body = append(ops[olen-2].Body, body...)
+			(&ops[olen-2]).extendBody(body)
 		} else {
-			*os = append(ops[:olen-1], Op{Body: body}, ops[olen-1])
+			os.insertPenultimate(Op{Body: body})
 		}
 	default:
-		*os = append(ops, Op{Body: body})
+		os.insertUltimate(Op{Body: body})
 	}
 }
 
@@ -160,7 +210,7 @@ func (os *Ops) Retain(size int) {
 	case len(*os) > 0 && os.Last().IsRetain():
 		os.Last().Size += size
 	default:
-		*os = append(*os, Op{Size: size})
+		os.insertUltimate(Op{Size: size})
 	}
 }
 
@@ -176,7 +226,7 @@ func (os *Ops) Delete(size int) {
 	if olen > 0 && ops[olen-1].IsDelete() {
 		ops[olen-1].Size += size
 	} else {
-		*os = append(ops, Op{Size: size})
+		os.insertUltimate(Op{Size: size})
 	}
 }
 
@@ -306,59 +356,96 @@ Fix:
 }
 
 func Transform(as, bs Ops) (Ops, Ops) {
-	var a, b *Op
+	var ai, bi int
+	var al, bl int
 	var aos, bos Ops
+	var a, b *Op
 
-Fix:
+	al = len(as)
+	bl = len(bs)
+
+	if ai < al {
+		a = &as[ai]
+	}
+	if bi < bl {
+		b = &bs[bi]
+	}
+
+	if al == 0 {
+		return nil, bs.Clone()
+	}
+	if bl == 0 {
+		return as.Clone(), nil
+	}
+
+	var loopCount = -1
+
+	fmt.Printf("xform: as: %s, bs: %s, a: %s, b: %s, ai: %d, bi: %d\n", as, bs, a, b, ai, bi)
 	for {
-		switch {
-		case len(as) == 0 && len(bs) == 0:
-			break Fix
-		case len(as) > 0 && as.First().IsInsert():
-			a = as.First()
+		loopCount++
+		fmt.Printf("loop: %d, a: %s, b: %s, ai: %d, bi: %d\n", loopCount, a, b, ai, bi)
+
+		if a == nil && b == nil {
+			break
+		}
+
+		if a.IsInsert() {
 			aos.Insert(a.Body)
 			bos.Retain(a.Len())
-			as = as.Rest()
+			ai++
+			if ai < al {
+				a = &as[ai]
+			} else {
+				a = nil
+			}
 			continue
-		case len(bs) > 0 && bs.First().IsInsert():
-			b = bs.First()
+		}
+		if b.IsInsert() {
 			aos.Retain(b.Len())
 			bos.Insert(b.Body)
-			bs = bs.Rest()
-			continue
-		case len(as) > 0 && len(bs) > 0:
-			a = as.First()
-			b = bs.First()
-			minlen := min(a.Len(), b.Len())
-			switch {
-			case a.IsRetain() && b.IsRetain():
-				aos.Retain(minlen)
-				bos.Retain(minlen)
-			case a.IsDelete() && b.IsRetain():
-				aos.Delete(minlen)
-			case a.IsRetain() && b.IsDelete():
-				bos.Delete(minlen)
-			}
-			a, b = shortenOps(a, b)
-			if a == nil {
-				as = as.Rest()
+			bi++
+			if bi < bl {
+				b = &bs[bi]
 			} else {
-				as = append(Ops{*a}, as.Rest()...)
-			}
-			if b == nil {
-				bs = bs.Rest()
-			} else {
-				bs = append(Ops{*b}, bs.Rest()...)
+				b = nil
 			}
 			continue
-		case len(as) > 0 && len(bs) == 0:
-			aos = append(aos, as...)
-			return aos, bos
-		case len(as) == 0 && len(bs) > 0:
-			bos = append(bos, bs...)
-			return aos, bos
-		default:
-			panic("oops!")
+		}
+		if a == nil {
+			panic("boom1")
+		}
+		if b == nil {
+			panic("boom2")
+		}
+
+		minlen := min(a.Len(), b.Len())
+		switch {
+		case a.IsRetain() && b.IsRetain():
+			aos.Retain(minlen)
+			bos.Retain(minlen)
+		case a.IsDelete() && b.IsRetain():
+			aos.Delete(minlen)
+		case a.IsRetain() && b.IsDelete():
+			bos.Delete(minlen)
+		}
+		a2, b2 := a, b
+		a, b = shortenOps(a, b)
+		fmt.Printf("shorten:\n\ta : %s\n\tb : %s\n\ta2: %s\n\tb2: %s\n", a2, b2, a, b)
+		if a == nil {
+			ai++
+			if ai < al {
+				a = &as[ai]
+			} else {
+				a = nil
+			}
+		}
+		if b == nil {
+			bi++
+			if bi < bl {
+				b = &bs[bi]
+			} else {
+				b = nil
+			}
 		}
 	}
 

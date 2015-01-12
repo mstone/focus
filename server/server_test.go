@@ -190,8 +190,7 @@ func (c *client) sendRandomOps() {
 			}
 			switch op {
 			case 0:
-				// s := fmt.Sprintf("%x", fc.Intn(4096))
-				s := fmt.Sprintf("%x", fc.Intn(16))
+				s := fmt.Sprintf("%x", fc.Intn(numChars))
 				pos := 0
 				if size > 0 {
 					pos = fc.Intn(size)
@@ -215,9 +214,12 @@ func (c *client) sendRandomOps() {
 	c.l.Info("client generated ops", "ops", ops)
 
 	c.l.Info("client send state", "state", c.st)
+	pdoc := c.doc.String()
 	c.doc.Apply(ops)
+	ndoc := c.doc.String()
+	pstate := c.st
 	c.st = c.st.Client(c, ops)
-	c.l.Info("client send returned", "state", c.st)
+	c.l.Info("client send returned", "action", "SEND", "ops", ops, "pdoc", pdoc, "ndoc", ndoc, "pstate", pstate, "nstate", c.st)
 }
 
 func (c *client) Send(ops ot.Ops) {
@@ -247,7 +249,7 @@ func (c *client) Recv(rev int, ops ot.Ops) {
 	c.doc.Apply(ops)
 	c.rev = rev
 	ndoc := c.doc.String()
-	c.l.Info("client recv done", "action", "STAT", "fd", c.fd, "pdoc", pdoc, "ndoc", ndoc, "prev", prev, "nrev", c.rev, "pstate", c.st)
+	c.l.Info("client recv done", "action", "STAT", "fd", c.fd, "pdoc", pdoc, "ndoc", ndoc, "prev", prev, "nrev", c.rev, "pstate", c.st, "ops", ops)
 }
 
 func (c *client) Ack(rev int) {
@@ -306,12 +308,13 @@ Loop:
 	c.l.Info("client finished readLoop", "action", "STAT", "rev", c.rev, "body", c.doc.String(), "state", c.st)
 }
 
-const numClients = 2
+const numClients = 4
 const numRounds = 2
+const numChars = 16
 
 func TestRandom(t *testing.T) {
 	go func() {
-		time.Sleep(300 * time.Millisecond)
+		time.Sleep(3000 * time.Millisecond)
 		panic("boom")
 	}()
 

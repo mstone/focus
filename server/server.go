@@ -78,7 +78,7 @@ func (s *Server) openDoc(w chan allocdocresp, name string) {
 			srvr:  s.msgs,
 			wg:    sync.WaitGroup{},
 			name:  name,
-			conns: map[int]chan interface{}{},
+			conns: map[int]dconn{},
 			hist:  []ot.Ops{},
 			comp:  ot.Ops{},
 		}

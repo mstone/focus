@@ -29,7 +29,7 @@ func (c *conn) String() string {
 	if c == nil {
 		return "nil"
 	}
-	return fmt.Sprintf("{c%d}", c.no)
+	return fmt.Sprintf("%d", c.no)
 }
 
 func (c *conn) Run() {
