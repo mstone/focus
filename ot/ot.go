@@ -94,7 +94,7 @@ func (o *Op) Len() int {
 	}
 }
 
-func AsRuneSlice(s string) []rune {
+func AsRunes(s string) []rune {
 	rs := make([]rune, utf8.RuneCountInString(s))
 	for i, r := range s {
 		rs[i] = r
@@ -248,7 +248,7 @@ func (o *Op) UnmarshalJSON(data []byte) error {
 		if err := json.Unmarshal(data, &s); err != nil {
 			return err
 		}
-		o.Body = AsSlice(s)
+		o.Body = AsRunes(s)
 		return nil
 	default:
 		return json.Unmarshal(data, &o.Size)

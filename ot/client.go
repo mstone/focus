@@ -145,20 +145,12 @@ func (b *Buffering) Ack(c Client, rev int) State {
 	}
 }
 
-func AsSlice(s string) []rune {
-	rs := []rune{}
-	for _, r := range s {
-		rs = append(rs, r)
-	}
-	return rs
-}
-
 func NewInsert(docLen int, pos int, s string) Ops {
 	if pos < 0 || pos > docLen+1 {
 		panic(fmt.Errorf("bad position; insert is out of range; pos: %d, s: %q", pos, s))
 	}
 
-	runes := AsSlice(s)
+	runes := AsRunes(s)
 
 	os := Ops{
 		Op{

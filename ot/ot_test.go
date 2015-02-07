@@ -10,7 +10,7 @@ import (
 )
 
 func TestJSON(t *testing.T) {
-	c1 := Ops{Op{Size: -1}, Op{Size: 1}, Op{Body: AsSlice("hi")}}
+	c1 := Ops{Op{Size: -1}, Op{Size: 1}, Op{Body: AsRunes("hi")}}
 
 	j1, err := json.Marshal(c1)
 	if err != nil {
@@ -294,11 +294,11 @@ func TestInsert(t *testing.T) {
 	table := []InsertCase{
 		InsertCase{
 			A: Ops{},
-			B: AsRuneSlice("a"),
+			B: AsRunes("a"),
 			C: Ops{
 				Op{
 					Size: 0,
-					Body: AsRuneSlice("a"),
+					Body: AsRunes("a"),
 				},
 			},
 		},
@@ -306,14 +306,14 @@ func TestInsert(t *testing.T) {
 			A: Ops{
 				Op{
 					Size: 0,
-					Body: AsRuneSlice("a"),
+					Body: AsRunes("a"),
 				},
 			},
-			B: AsRuneSlice("b"),
+			B: AsRunes("b"),
 			C: Ops{
 				Op{
 					Size: 0,
-					Body: AsRuneSlice("ab"),
+					Body: AsRunes("ab"),
 				},
 			},
 		},
@@ -321,18 +321,18 @@ func TestInsert(t *testing.T) {
 			A: Ops{
 				Op{
 					Size: 0,
-					Body: AsRuneSlice("a"),
+					Body: AsRunes("a"),
 				},
 				Op{
 					Size: -2,
 					Body: nil,
 				},
 			},
-			B: AsRuneSlice("b"),
+			B: AsRunes("b"),
 			C: Ops{
 				Op{
 					Size: 0,
-					Body: AsRuneSlice("ab"),
+					Body: AsRunes("ab"),
 				},
 				Op{
 					Size: -2,
@@ -347,11 +347,11 @@ func TestInsert(t *testing.T) {
 					Body: nil,
 				},
 			},
-			B: AsRuneSlice("a"),
+			B: AsRunes("a"),
 			C: Ops{
 				Op{
 					Size: 0,
-					Body: AsRuneSlice("a"),
+					Body: AsRunes("a"),
 				},
 				Op{
 					Size: -2,
@@ -386,10 +386,10 @@ func TestTransform(t *testing.T) {
 		// xy     x5y
 		// xby    x5by
 		TransformCase{
-			A: Ops{Op{1, nil}, Op{0, AsRuneSlice("5")}, Op{1, nil}},
-			B: Ops{Op{1, nil}, Op{0, AsRuneSlice("b")}, Op{1, nil}},
-			C: Ops{Op{1, nil}, Op{0, AsRuneSlice("5")}, Op{2, nil}},
-			D: Ops{Op{2, nil}, Op{0, AsRuneSlice("b")}, Op{1, nil}},
+			A: Ops{Op{1, nil}, Op{0, AsRunes("5")}, Op{1, nil}},
+			B: Ops{Op{1, nil}, Op{0, AsRunes("b")}, Op{1, nil}},
+			C: Ops{Op{1, nil}, Op{0, AsRunes("5")}, Op{2, nil}},
+			D: Ops{Op{2, nil}, Op{0, AsRunes("b")}, Op{1, nil}},
 		},
 	}
 	doTransformTable(t, table)
