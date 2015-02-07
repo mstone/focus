@@ -113,12 +113,27 @@ func (b *Buffering) Client(c Client, ops Ops) State {
 }
 
 func (b *Buffering) Server(c Client, rev int, ops Ops) State {
-	inflight2, ops2 := Transform(b.inflight, ops)
-	waiting2, ops3 := Transform(b.waiting, ops2)
-	c.Recv(rev, ops3)
+	/*
+	        *
+	      i/ \o
+	      *   *
+	    w/ \ /i2
+	    *   *
+	   o3\ /w2
+	      *
+	*/
+
+	i := b.inflight
+	o := ops
+	w := b.waiting
+
+	i2, o2 := Transform(i, o)
+	w2, o3 := Transform(w, o2)
+
+	c.Recv(rev, o3)
 	return &Buffering{
-		inflight: inflight2,
-		waiting:  waiting2,
+		inflight: i2,
+		waiting:  w2,
 	}
 }
 
