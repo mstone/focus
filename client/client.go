@@ -47,7 +47,7 @@ func main() {
 	apiEndPoint := aceDiv.Get("dataset").Get("vppApi")
 	vaporpadName := aceDiv.Get("dataset").Get("vppName")
 
-	conn = js.Global.Get("WebSocket").New(apiEndPoint.Str())
+	conn = js.Global.Get("WebSocket").New(apiEndPoint.String())
 
 	conn.Set("onclose", func(e js.Object) {
 	})
@@ -55,14 +55,14 @@ func main() {
 		state = &ot.Synchronized{}
 		jsOps, _ := json.Marshal(msg.Msg{
 			Cmd:  msg.C_OPEN,
-			Name: vaporpadName.Str(),
+			Name: vaporpadName.String(),
 		})
 		conn.Call("send", jsOps)
 	})
 	conn.Set("onmessage", func(e js.Object) {
 		m := msg.Msg{}
 
-		err := json.Unmarshal([]byte(e.Get("data").Str()), &m)
+		err := json.Unmarshal([]byte(e.Get("data").String()), &m)
 		if err != nil {
 			alert.Golang(err)
 			panic(err.Error())

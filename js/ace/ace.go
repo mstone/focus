@@ -205,7 +205,7 @@ func (a *Adapter) OnChange(change js.Object) bool {
 	data := change.Get("data")
 	alert.JSON(data)
 
-	action := data.Get("action").Str()
+	action := data.Get("action").String()
 	textRange := NewRange(a.doc, data.Get("range"))
 
 	start := textRange.Start()
@@ -214,7 +214,7 @@ func (a *Adapter) OnChange(change js.Object) bool {
 	var ops ot.Ops
 	switch action {
 	case "insertText":
-		str := data.Get("text").Str()
+		str := data.Get("text").String()
 		oldLen := length - (end - start)
 		alert.String(fmt.Sprintf("newInsert(%d, %d, %q)", oldLen, start, str))
 		ops = ot.NewInsert(oldLen, start, str)
@@ -227,7 +227,7 @@ func (a *Adapter) OnChange(change js.Object) bool {
 		numLines := linesObj.Length()
 		lines := make([]string, numLines)
 		for i := 0; i < numLines; i++ {
-			lines[i] = linesObj.Index(i).Str() + "\n"
+			lines[i] = linesObj.Index(i).String() + "\n"
 		}
 		str := strings.Join(lines, "")
 		numRunes := utf8.RuneCountInString(str)
@@ -238,7 +238,7 @@ func (a *Adapter) OnChange(change js.Object) bool {
 		numLines := linesObj.Length()
 		lines := make([]string, numLines)
 		for i := 0; i < numLines; i++ {
-			lines[i] = linesObj.Index(i).Str() + "\n"
+			lines[i] = linesObj.Index(i).String() + "\n"
 		}
 		str := strings.Join(lines, "")
 		numRunes := utf8.RuneCountInString(str)
