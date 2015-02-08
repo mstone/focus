@@ -18,6 +18,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	log "gopkg.in/inconshreveable/log15.v2"
 
+	otserver "github.com/mstone/focus/internal/server"
 	"github.com/mstone/focus/server"
 	"github.com/mstone/focus/store"
 )
@@ -88,7 +89,13 @@ func main() {
 		Assets: *assets,
 	}
 
-	server, err := server.New(serverCfg)
+	otServer, err := otserver.New()
+	if err != nil {
+		log.Crit("unable to configure ot-server", "err", err)
+		return
+	}
+
+	server, err := server.New(serverCfg, otServer)
 	if err != nil {
 		log.Crit("unable to configure server", "err", err)
 		return

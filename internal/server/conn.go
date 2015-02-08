@@ -6,11 +6,19 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"time"
 
 	log "gopkg.in/inconshreveable/log15.v2"
-
-	"github.com/gorilla/websocket"
 )
+
+type WebSocket interface {
+	ReadJSON(v interface{}) error
+	WriteJSON(v interface{}) error
+	SetReadTimeout(d time.Duration) error
+	SetWriteTimeout(d time.Duration) error
+	CancelReadTimeout() error
+	CancelWriteTimeout() error
+}
 
 // struct conn represents an open WebSocket connection.
 type conn struct {
@@ -20,7 +28,7 @@ type conn struct {
 	numSend int
 	numRecv int
 	wg      sync.WaitGroup
-	ws      *websocket.Conn
+	ws      WebSocket
 	docs    map[int]chan interface{}
 	srvr    chan interface{}
 }
@@ -54,11 +62,11 @@ func (c *conn) onVppOpen(m msg.Msg) {
 
 	srvrResp := <-srvrReplyChan
 	if srvrResp.err != nil {
-		c.l.Error("conn unable to allocdoc", "err", srvrResp.err)
-		panic("conn unable to allocdoc")
+		c.l.Error("conn unable to Allocdoc", "err", srvrResp.err)
+		panic("conn unable to Allocdoc")
 	}
 
-	c.l.Info("conn finished allocdoc, sending open", "cmd", m)
+	c.l.Info("conn finished Allocdoc, sending open", "cmd", m)
 
 	doc := srvrResp.doc
 	doc <- open{
@@ -102,7 +110,7 @@ func (c *conn) readLoop() {
 			c.l.Error("conn got unknown cmd; exiting", "cmd", m)
 			return
 		case msg.C_OPEN:
-			c.l.Info("conn got OPEN, sending allocdoc", "cmd", m)
+			c.l.Info("conn got OPEN, sending Allocdoc", "cmd", m)
 			c.onVppOpen(m)
 			c.l.Info("conn finished OPEN", "cmd", m)
 		case msg.C_WRITE:
