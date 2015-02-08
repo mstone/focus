@@ -45,6 +45,46 @@ func (c *conn) Close() error {
 	return nil
 }
 
+func (c *conn) onVppOpen(m msg.Msg) {
+	srvrReplyChan := make(chan allocdocresp)
+	c.srvr <- allocdoc{
+		reply: srvrReplyChan,
+		name:  m.Name,
+	}
+
+	srvrResp := <-srvrReplyChan
+	if srvrResp.err != nil {
+		c.l.Error("conn unable to allocdoc", "err", srvrResp.err)
+		panic("conn unable to allocdoc")
+	}
+
+	c.l.Info("conn finished allocdoc, sending open", "cmd", m)
+
+	doc := srvrResp.doc
+	doc <- open{
+		dbgConn: c,
+		conn:    c.msgs,
+		name:    m.Name,
+	}
+
+}
+
+func (c *conn) onVppWrite(m msg.Msg) {
+	doc, ok := c.docs[m.Fd]
+	if !ok {
+		c.l.Error("conn got WRITE with bad fd, exiting")
+		panic("conn got WRITE with bad fd")
+	}
+	c.l.Info("conn enqueuing write for doc", "cmd", m, "doc", doc)
+	doc <- write{
+		dbgConn: c,
+		fd:      m.Fd,
+		rev:     m.Rev,
+		ops:     m.Ops,
+	}
+
+}
+
 func (c *conn) readLoop() {
 	defer c.wg.Done()
 
@@ -63,41 +103,11 @@ func (c *conn) readLoop() {
 			return
 		case msg.C_OPEN:
 			c.l.Info("conn got OPEN, sending allocdoc", "cmd", m)
-			srvrReplyChan := make(chan allocdocresp)
-			c.srvr <- allocdoc{
-				reply: srvrReplyChan,
-				name:  m.Name,
-			}
-
-			srvrResp := <-srvrReplyChan
-			if srvrResp.err != nil {
-				c.l.Error("conn unable to allocdoc", "err", srvrResp.err)
-				panic("conn unable to allocdoc")
-			}
-
-			c.l.Info("conn finished allocdoc, sending open", "cmd", m)
-
-			doc := srvrResp.doc
-			doc <- open{
-				dbgConn: c,
-				conn:    c.msgs,
-				name:    m.Name,
-			}
+			c.onVppOpen(m)
 			c.l.Info("conn finished OPEN", "cmd", m)
 		case msg.C_WRITE:
 			c.l.Info("conn got WRITE", "cmd", m)
-			doc, ok := c.docs[m.Fd]
-			if !ok {
-				c.l.Error("conn got WRITE with bad fd, exiting")
-				panic("conn got WRITE with bad fd")
-			}
-			c.l.Info("conn enqueuing write for doc", "cmd", m, "doc", doc)
-			doc <- write{
-				dbgConn: c,
-				fd:      m.Fd,
-				rev:     m.Rev,
-				ops:     m.Ops,
-			}
+			c.onVppWrite(m)
 			c.l.Info("conn finished WRITE", "cmd", m)
 		}
 		c.numRecv++
