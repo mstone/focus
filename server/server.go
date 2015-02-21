@@ -109,13 +109,11 @@ func (s *Server) configure() error {
 
 		ws2 := WSConn{ws}
 
-		c, err := s.s.AllocConn(ws2)
+		_, err = s.s.AllocConn(ws2)
 		if err != nil {
 			log.Error("server unable to allocate new conn no", "err", err)
 			return
 		}
-
-		c.Run()
 	})
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {

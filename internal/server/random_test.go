@@ -11,13 +11,15 @@ import (
 	fuzz "github.com/google/gofuzz"
 	log "gopkg.in/inconshreveable/log15.v2"
 
+	"github.com/mstone/focus/internal/connection"
+	im "github.com/mstone/focus/internal/msgs"
 	"github.com/mstone/focus/msg"
 	"github.com/mstone/focus/ot"
 )
 
-const numClients = 20
-const numRounds = 20
-const numChars = 16
+const numClients = 100
+const numRounds = 40
+const numChars = 256
 
 type ws struct {
 	rq, wq chan interface{}
@@ -93,7 +95,7 @@ type client struct {
 	clname  string
 	name    string
 	fd      int
-	ws      WebSocket
+	ws      connection.WebSocket
 	rev     int
 	doc     *ot.Doc
 	st      ot.State
@@ -225,7 +227,7 @@ Loop:
 
 func TestRandom(t *testing.T) {
 	go func() {
-		time.Sleep(600 * time.Millisecond)
+		time.Sleep(10000 * time.Millisecond)
 		panic("boom")
 	}()
 
@@ -268,8 +270,7 @@ func TestRandom(t *testing.T) {
 		)
 		clients[idx] = c
 
-		srvConn, _ := focusSrv.AllocConn(conn2)
-		go srvConn.Run()
+		focusSrv.AllocConn(conn2)
 
 		conn.SetWriteTimeout(100 * time.Millisecond)
 		err = conn.WriteJSON(msg.Msg{
@@ -333,8 +334,10 @@ func TestRandom(t *testing.T) {
 	wg.Wait()
 
 	d := focusSrv.names["/"]
-	t.Logf("server doc: %s", d.String())
-	sd := d.Body()
+	sdrc := make(chan im.Readallresp)
+	d <- im.Readall{sdrc}
+	sdr := <-sdrc
+	sd := sdr.Body
 	for i := 0; i < numClients; i++ {
 		s1 := clients[i].doc.String()
 		if sd != s1 {

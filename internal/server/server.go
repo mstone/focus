@@ -1,18 +1,16 @@
 package server
 
 import (
-	"sync"
-
+	"github.com/mstone/focus/internal/connection"
+	"github.com/mstone/focus/internal/document"
+	im "github.com/mstone/focus/internal/msgs"
 	log "gopkg.in/inconshreveable/log15.v2"
-
-	"github.com/mstone/focus/ot"
 )
 
 type Server struct {
 	l        log.Logger
 	msgs     chan interface{}
-	conns    map[*conn]struct{}
-	names    map[string]*doc
+	names    map[string]chan interface{}
 	nextFd   int
 	nextConn int
 }
@@ -21,92 +19,70 @@ func New() (*Server, error) {
 	s := &Server{
 		msgs:     make(chan interface{}),
 		l:        log.Root(),
-		conns:    map[*conn]struct{}{},
-		names:    map[string]*doc{},
+		names:    map[string]chan interface{}{},
 		nextFd:   0,
 		nextConn: 0,
 	}
 	return s, nil
 }
 
-func (s *Server) addConn(c *conn) {
-	s.conns[c] = struct{}{}
-}
+func (s *Server) openDoc(w chan im.Allocdocresp, name string) {
+	var d chan interface{}
+	var ok bool
 
-func (s *Server) openDoc(w chan allocdocresp, name string) {
-	d, ok := s.names[name]
+	d, ok = s.names[name]
 	if !ok {
-		d = &doc{
-			msgs:  make(chan interface{}),
-			srvr:  s.msgs,
-			wg:    sync.WaitGroup{},
-			name:  name,
-			conns: map[int]dconn{},
-			hist:  []ot.Ops{},
-			comp:  ot.Ops{},
-		}
+		d = document.New(s.msgs, name)
 		s.names[name] = d
-		go d.Run()
 	}
-	w <- allocdocresp{
-		err: nil,
-		doc: d.msgs,
+	w <- im.Allocdocresp{
+		Err: nil,
+		Doc: d,
 	}
 }
 
-func (s *Server) allocFd(reply chan allocfdresp) {
+func (s *Server) allocFd(reply chan im.Allocfdresp) {
 	fd := s.nextFd
 	s.nextFd++
-	reply <- allocfdresp{
-		err: nil,
-		fd:  fd,
+	reply <- im.Allocfdresp{
+		Err: nil,
+		Fd:  fd,
 	}
 }
 
-func (s *Server) allocConn(reply chan allocconnresp) {
+func (s *Server) allocConn(reply chan im.Allocconnresp) {
 	no := s.nextConn
 	s.nextConn++
-	reply <- allocconnresp{
-		err: nil,
-		no:  no,
+	reply <- im.Allocconnresp{
+		Err: nil,
+		No:  no,
 	}
 }
 
-func (s *Server) AllocConn(ws WebSocket) (*conn, error) {
-	srvrReplyChan := make(chan allocconnresp)
-	s.msgs <- allocconn{srvrReplyChan}
+func (s *Server) AllocConn(ws connection.WebSocket) (chan interface{}, error) {
+	srvrReplyChan := make(chan im.Allocconnresp)
+	s.msgs <- im.Allocconn{srvrReplyChan}
 	srvrResp := <-srvrReplyChan
 
-	if srvrResp.err != nil {
-		return nil, srvrResp.err
+	if srvrResp.Err != nil {
+		return nil, srvrResp.Err
 	}
 
-	c := &conn{
-		msgs:    make(chan interface{}),
-		no:      srvrResp.no,
-		numSend: 0,
-		numRecv: 0,
-		wg:      sync.WaitGroup{},
-		ws:      ws,
-		docs:    map[int]chan interface{}{},
-		srvr:    s.msgs,
-	}
-
+	c := connection.New(s.msgs, ws)
 	return c, nil
 }
 
 func (s *Server) readLoop() {
 	for m := range s.msgs {
-		s.l.Info("server read msg", "cmd", m)
 		switch v := m.(type) {
 		default:
 			s.l.Error("server got unknown msg", "cmd", m)
-		case allocdoc:
-			s.openDoc(v.reply, v.name)
-		case allocfd:
-			s.allocFd(v.reply)
-		case allocconn:
-			s.allocConn(v.reply)
+		case im.Allocdoc:
+			s.openDoc(v.Reply, v.Name)
+		case im.Allocfd:
+			s.allocFd(v.Reply)
+		case im.Allocconn:
+			s.allocConn(v.Reply)
 		}
 	}
 }
