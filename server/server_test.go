@@ -211,7 +211,7 @@ func (c *client) sendRandomOps() {
 		},
 	)
 	f.NumElements(1, 1).Fuzz(&ops)
-	c.l.Info("client generated ops", "ops", ops)
+	c.l.Info("client generated ops", "ops", ops, "fd", c.fd)
 
 	c.l.Info("client send state", "state", c.st)
 	pdoc := c.doc.String()
@@ -249,7 +249,7 @@ func (c *client) Recv(rev int, ops ot.Ops) {
 	c.doc.Apply(ops)
 	c.rev = rev
 	ndoc := c.doc.String()
-	c.l.Info("client recv done", "action", "STAT", "fd", c.fd, "pdoc", pdoc, "ndoc", ndoc, "prev", prev, "nrev", c.rev, "pstate", c.st, "ops", ops)
+	c.l.Info("client recv done", "action", "STAT", "fd", c.fd, "pdoc", pdoc, "ndoc", ndoc, "rev", prev, "nrev", c.rev, "pstate", c.st, "ops", ops)
 }
 
 func (c *client) Ack(rev int) {
@@ -431,6 +431,10 @@ func TestRandom(t *testing.T) {
 	d.l.Info("server doc final state", "action", "STAT", "rev", len(d.hist), "comp", d.comp, "hist", d.hist, "body", d.Body())
 	t.Logf("server doc: %s", d.String())
 	sd := d.Body()
+	for i := 0; i < numClients; i++ {
+		c := clients[i]
+		c.l.Info("client final state", "action", "STAT", "body", c.doc.String(), "rev", c.rev, "fd", c.fd)
+	}
 	for i := 0; i < numClients; i++ {
 		s1 := clients[i].doc.String()
 		if sd != s1 {

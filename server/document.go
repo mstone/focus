@@ -170,7 +170,7 @@ func (d *doc) transform(rev int, ops ot.Ops) (int, ot.Ops) {
 	d.l.Info("doc composed transformed ops", "action", "COMP", "prev", prev, "comp", d.comp)
 
 	rev = len(d.hist)
-	d.l.Info("doc state", "action", "STAT", "rev", rev, "comp", d.comp, "hist", d.hist, "body", d.Body())
+	d.l.Info("doc state", "action", "STAT", "rev", rev, "comp", d.comp, "hist", d.hist, "body", d.Body(), "ops", ops, "conops", concurrentOps, "cops", composedOps, "tops", transformedOps)
 
 	return rev, transformedOps
 }
