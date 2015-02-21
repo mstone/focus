@@ -1,7 +1,9 @@
+// Copyright 2015 Akamai Technologies, Inc.
+// Please see the accompanying LICENSE file for licensing information.
+
 package connection
 
 import (
-	"fmt"
 	"sync"
 	"time"
 
@@ -92,7 +94,6 @@ func (c *conn) setDoc(fd int, doc chan interface{}) {
 func (c *conn) onVppWrite(m msg.Msg) {
 	doc, ok := c.getDoc(m.Fd)
 	if !ok {
-		fmt.Printf("oops\n")
 		panic("conn got WRITE with bad fd")
 	}
 	doc <- im.Write{

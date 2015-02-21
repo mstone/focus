@@ -1,3 +1,6 @@
+// Copyright 2015 Akamai Technologies, Inc.
+// Please see the accompanying LICENSE file for licensing information.
+
 package server
 
 import (
@@ -36,12 +39,12 @@ type Allocdocresp struct {
 	Doc chan interface{}
 }
 
+// processed by doc for conn
 type Opencompletion struct {
 	Fd  int
 	Doc chan interface{}
 }
 
-// processed by doc for conn
 type Open struct {
 	Reply chan Opencompletion
 	Conn  chan interface{}
@@ -75,16 +78,22 @@ type Allocconnresp struct {
 	No  int
 }
 
+// processed by conn for doc
+
 type Writeresp struct {
 	Fd  int
 	Rev int
 }
+
+// processed by doc for conn and by conn for doc
 
 type Write struct {
 	Fd  int
 	Rev int
 	Ops ot.Ops
 }
+
+// processed by doc for tests
 
 type Readall struct {
 	Reply chan Readallresp

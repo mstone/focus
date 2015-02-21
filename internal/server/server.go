@@ -1,14 +1,15 @@
+// Copyright 2015 Akamai Technologies, Inc.
+// Please see the accompanying LICENSE file for licensing information.
+
 package server
 
 import (
 	"github.com/mstone/focus/internal/connection"
 	"github.com/mstone/focus/internal/document"
 	im "github.com/mstone/focus/internal/msgs"
-	log "gopkg.in/inconshreveable/log15.v2"
 )
 
 type Server struct {
-	l        log.Logger
 	msgs     chan interface{}
 	names    map[string]chan interface{}
 	nextFd   int
@@ -18,7 +19,6 @@ type Server struct {
 func New() (*Server, error) {
 	s := &Server{
 		msgs:     make(chan interface{}),
-		l:        log.Root(),
 		names:    map[string]chan interface{}{},
 		nextFd:   0,
 		nextConn: 0,
@@ -76,7 +76,7 @@ func (s *Server) readLoop() {
 	for m := range s.msgs {
 		switch v := m.(type) {
 		default:
-			s.l.Error("server got unknown msg", "cmd", m)
+			//s.l.Error("server got unknown msg", "cmd", m)
 		case im.Allocdoc:
 			s.openDoc(v.Reply, v.Name)
 		case im.Allocfd:

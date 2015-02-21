@@ -1,10 +1,9 @@
+// Copyright 2015 Akamai Technologies, Inc.
+// Please see the accompanying LICENSE file for licensing information.
+
 package document
 
 import (
-	"sync"
-
-	log "gopkg.in/inconshreveable/log15.v2"
-
 	im "github.com/mstone/focus/internal/msgs"
 	"github.com/mstone/focus/ot"
 )
@@ -13,8 +12,6 @@ import (
 type doc struct {
 	msgs  chan interface{}
 	srvr  chan interface{}
-	l     log.Logger
-	wg    sync.WaitGroup
 	name  string
 	conns map[int]chan interface{}
 	hist  []ot.Ops
@@ -25,7 +22,6 @@ func New(srvr chan interface{}, name string) chan interface{} {
 	d := &doc{
 		msgs:  make(chan interface{}),
 		srvr:  srvr,
-		wg:    sync.WaitGroup{},
 		name:  name,
 		conns: map[int]chan interface{}{},
 		hist:  []ot.Ops{},
@@ -42,9 +38,7 @@ func (d *doc) Body() string {
 }
 
 func (d *doc) Run() {
-	d.wg.Add(1)
 	go d.readLoop()
-	d.wg.Wait()
 }
 
 func (d *doc) openDescription(conn chan interface{}, reply chan im.Opencompletion) {
@@ -84,8 +78,6 @@ func (d *doc) openDescription(conn chan interface{}, reply chan im.Opencompletio
 }
 
 func (d *doc) readLoop() {
-	defer d.wg.Done()
-
 	for m := range d.msgs {
 		switch v := m.(type) {
 		default:
