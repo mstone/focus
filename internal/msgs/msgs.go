@@ -18,9 +18,7 @@ cl ----  OPEN ---->  conn
                      conn  ----- Allocdoc ----->  srv
                      conn  <----   *doc  -------  srv
                      conn  -----   open    ---->  doc
-                                                  doc ----- allocfd -----> srv
-                                                  doc <----  *fd   ------- srv
-                     conn  <------  fd  --------  doc
+                     conn  <------ fd    -------  doc
                      conn  <------ openresp ----  doc
                      conn  <------ write  ------  doc
 cl <-- openresp  --  conn
@@ -40,15 +38,10 @@ type Allocdocresp struct {
 }
 
 // processed by doc for conn
-type Opencompletion struct {
-	Fd  int
-	Doc chan interface{}
-}
-
 type Open struct {
-	Reply chan Opencompletion
-	Conn  chan interface{}
-	Name  string
+	Conn chan interface{}
+	Name string
+	Fd   int
 }
 
 type Openresp struct {
@@ -58,33 +51,21 @@ type Openresp struct {
 	Fd   int
 }
 
-// processed by Server for doc
-type Allocfd struct {
-	Reply chan Allocfdresp
-}
-
-type Allocfdresp struct {
-	Err error
-	Fd  int
-}
-
 // processed by conn for doc
-
 type Writeresp struct {
-	Fd  int
+	Doc chan interface{}
 	Rev int
 }
 
 // processed by doc for conn and by conn for doc
-
 type Write struct {
-	Fd  int
-	Rev int
-	Ops ot.Ops
+	Conn chan interface{}
+	Doc  chan interface{}
+	Rev  int
+	Ops  ot.Ops
 }
 
 // processed by doc for tests
-
 type Readall struct {
 	Reply chan Readallresp
 }

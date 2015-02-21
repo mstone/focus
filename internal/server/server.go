@@ -10,18 +10,14 @@ import (
 )
 
 type Server struct {
-	msgs     chan interface{}
-	names    map[string]chan interface{}
-	nextFd   int
-	nextConn int
+	msgs  chan interface{}
+	names map[string]chan interface{}
 }
 
 func New() (*Server, error) {
 	s := &Server{
-		msgs:     make(chan interface{}),
-		names:    map[string]chan interface{}{},
-		nextFd:   0,
-		nextConn: 0,
+		msgs:  make(chan interface{}),
+		names: map[string]chan interface{}{},
 	}
 	go s.readLoop()
 	return s, nil
@@ -42,15 +38,6 @@ func (s *Server) onAllocDoc(w chan im.Allocdocresp, name string) {
 	}
 }
 
-func (s *Server) onAllocFd(reply chan im.Allocfdresp) {
-	fd := s.nextFd
-	s.nextFd++
-	reply <- im.Allocfdresp{
-		Err: nil,
-		Fd:  fd,
-	}
-}
-
 func (s *Server) Connect(ws connection.WebSocket) (chan interface{}, error) {
 	c := connection.New(s.msgs, ws)
 	return c, nil
@@ -62,8 +49,6 @@ func (s *Server) readLoop() {
 		default:
 		case im.Allocdoc:
 			s.onAllocDoc(v.Reply, v.Name)
-		case im.Allocfd:
-			s.onAllocFd(v.Reply)
 		}
 	}
 }

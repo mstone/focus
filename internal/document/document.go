@@ -13,7 +13,7 @@ type doc struct {
 	msgs  chan interface{}
 	srvr  chan interface{}
 	name  string
-	conns map[int]chan interface{}
+	conns map[chan interface{}]struct{}
 	hist  []ot.Ops
 	comp  ot.Ops
 }
@@ -23,7 +23,7 @@ func New(srvr chan interface{}, name string) chan interface{} {
 		msgs:  make(chan interface{}),
 		srvr:  srvr,
 		name:  name,
-		conns: map[int]chan interface{}{},
+		conns: map[chan interface{}]struct{}{},
 		hist:  []ot.Ops{},
 		comp:  ot.Ops{},
 	}
@@ -37,24 +37,8 @@ func (d *doc) Body() string {
 	return doc.String()
 }
 
-func (d *doc) openDescription(conn chan interface{}, reply chan im.Opencompletion) {
-	srvrReplyChan := make(chan im.Allocfdresp)
-	d.srvr <- im.Allocfd{srvrReplyChan}
-	srvrResp := <-srvrReplyChan
-
-	if srvrResp.Err != nil {
-		conn <- im.Openresp{
-			Err: srvrResp.Err,
-		}
-		return
-	}
-
-	fd := srvrResp.Fd
-
-	reply <- im.Opencompletion{fd, d.msgs}
-	close(reply)
-
-	d.conns[fd] = conn
+func (d *doc) openDescription(fd int, conn chan interface{}) {
+	d.conns[conn] = struct{}{}
 
 	m := im.Openresp{
 		Err:  nil,
@@ -66,7 +50,7 @@ func (d *doc) openDescription(conn chan interface{}, reply chan im.Opencompletio
 
 	rev := len(d.hist)
 	m2 := im.Write{
-		Fd:  fd,
+		Doc: d.msgs,
 		Rev: rev,
 		Ops: d.comp,
 	}
@@ -79,7 +63,7 @@ func (d *doc) readLoop() {
 		default:
 			panic("doc read unknown message")
 		case im.Open:
-			d.openDescription(v.Conn, v.Reply)
+			d.openDescription(v.Fd, v.Conn)
 		case im.Readall:
 			v.Reply <- im.Readallresp{
 				Name: d.name,
@@ -87,12 +71,8 @@ func (d *doc) readLoop() {
 				Rev:  len(d.hist),
 			}
 		case im.Write:
-			conn, ok := d.conns[v.Fd]
-			if !ok {
-				panic("doc got write with unknown fd")
-			}
 			rev, ops := d.transform(v.Rev, v.Ops)
-			d.broadcast(conn, v.Fd, rev, ops)
+			d.broadcast(v.Conn, rev, ops)
 		}
 	}
 }
@@ -124,17 +104,17 @@ func (d *doc) transform(rev int, ops ot.Ops) (int, ot.Ops) {
 	return rev, transformedOps
 }
 
-func (d *doc) broadcast(conn chan interface{}, fd int, rev int, ops ot.Ops) {
-	send := func(pfd int, pconn chan interface{}) {
+func (d *doc) broadcast(conn chan interface{}, rev int, ops ot.Ops) {
+	send := func(pconn chan interface{}) {
 		if pconn == conn {
 			m := im.Writeresp{
-				Fd:  pfd,
+				Doc: d.msgs,
 				Rev: rev,
 			}
 			pconn <- m
 		} else {
 			m := im.Write{
-				Fd:  pfd,
+				Doc: d.msgs,
 				Rev: rev,
 				Ops: ops,
 			}
@@ -142,7 +122,7 @@ func (d *doc) broadcast(conn chan interface{}, fd int, rev int, ops ot.Ops) {
 		}
 	}
 
-	for pfd, pconn := range d.conns {
-		send(pfd, pconn)
+	for pconn, _ := range d.conns {
+		send(pconn)
 	}
 }

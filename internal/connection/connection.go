@@ -22,20 +22,24 @@ type WebSocket interface {
 
 // struct conn represents an open WebSocket connection.
 type conn struct {
-	mu   sync.Mutex
-	msgs chan interface{}
-	ws   WebSocket
-	docs map[int]chan interface{}
-	srvr chan interface{}
+	mu     sync.Mutex
+	msgs   chan interface{}
+	ws     WebSocket
+	docs   map[int]chan interface{}
+	fds    map[chan interface{}]int
+	srvr   chan interface{}
+	nextFd int
 }
 
 func New(srvr chan interface{}, ws WebSocket) chan interface{} {
 	c := &conn{
-		mu:   sync.Mutex{},
-		msgs: make(chan interface{}),
-		ws:   ws,
-		docs: map[int]chan interface{}{},
-		srvr: srvr,
+		mu:     sync.Mutex{},
+		msgs:   make(chan interface{}),
+		ws:     ws,
+		docs:   map[int]chan interface{}{},
+		fds:    map[chan interface{}]int{},
+		srvr:   srvr,
+		nextFd: 0,
 	}
 	go c.readLoop()
 	go c.writeLoop()
@@ -44,6 +48,17 @@ func New(srvr chan interface{}, ws WebSocket) chan interface{} {
 
 func (c *conn) Close() error {
 	return nil
+}
+
+func (c *conn) allocFd() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	fd := c.nextFd
+
+	c.nextFd++
+
+	return fd
 }
 
 func (c *conn) onVppOpen(m msg.Msg) {
@@ -58,17 +73,15 @@ func (c *conn) onVppOpen(m msg.Msg) {
 		panic("conn unable to Allocdoc")
 	}
 
-	complete := make(chan im.Opencompletion)
-
+	fd := c.allocFd()
 	doc := srvrResp.Doc
-	doc <- im.Open{
-		Reply: complete,
-		Conn:  c.msgs,
-		Name:  m.Name,
-	}
+	c.setDoc(fd, doc)
 
-	cmp := <-complete
-	c.setDoc(cmp.Fd, cmp.Doc)
+	doc <- im.Open{
+		Conn: c.msgs,
+		Name: m.Name,
+		Fd:   fd,
+	}
 }
 
 func (c *conn) getDoc(fd int) (chan interface{}, bool) {
@@ -76,8 +89,15 @@ func (c *conn) getDoc(fd int) (chan interface{}, bool) {
 	defer c.mu.Unlock()
 
 	doc, ok := c.docs[fd]
-
 	return doc, ok
+}
+
+func (c *conn) getFd(doc chan interface{}) (int, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	fd, ok := c.fds[doc]
+	return fd, ok
 }
 
 func (c *conn) setDoc(fd int, doc chan interface{}) {
@@ -85,6 +105,7 @@ func (c *conn) setDoc(fd int, doc chan interface{}) {
 	defer c.mu.Unlock()
 
 	c.docs[fd] = doc
+	c.fds[doc] = fd
 }
 
 func (c *conn) onVppWrite(m msg.Msg) {
@@ -93,9 +114,9 @@ func (c *conn) onVppWrite(m msg.Msg) {
 		panic("conn got WRITE with bad fd")
 	}
 	doc <- im.Write{
-		Fd:  m.Fd,
-		Rev: m.Rev,
-		Ops: m.Ops,
+		Conn: c.msgs,
+		Rev:  m.Rev,
+		Ops:  m.Ops,
 	}
 }
 
@@ -129,15 +150,23 @@ func (c *conn) writeLoop() {
 				Fd:   v.Fd,
 			})
 		case im.Writeresp:
+			fd, ok := c.getFd(v.Doc)
+			if !ok {
+				panic("conn got WRITERESP with bad doc")
+			}
 			c.ws.WriteJSON(msg.Msg{
 				Cmd: msg.C_WRITE_RESP,
-				Fd:  v.Fd,
+				Fd:  fd,
 				Rev: v.Rev,
 			})
 		case im.Write:
+			fd, ok := c.getFd(v.Doc)
+			if !ok {
+				panic("conn got WRITE with bad doc")
+			}
 			c.ws.WriteJSON(msg.Msg{
 				Cmd: msg.C_WRITE,
-				Fd:  v.Fd,
+				Fd:  fd,
 				Rev: v.Rev,
 				Ops: v.Ops,
 			})
