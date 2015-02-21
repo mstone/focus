@@ -20,9 +20,9 @@ import (
 	"github.com/mstone/focus/ot"
 )
 
-const numClients = 100
-const numRounds = 80
-const numChars = 4096
+const numClients = 9
+const numRounds = 3
+const numChars = 8
 
 type ws struct {
 	rq, wq chan interface{}
@@ -211,7 +211,7 @@ func (c *client) readLoop() {
 Loop:
 	for {
 		m := msg.Msg{}
-		c.ws.SetReadTimeout(1000 * time.Millisecond)
+		c.ws.SetReadTimeout(100 * time.Millisecond)
 		err := c.ws.ReadJSON(&m)
 		c.ws.CancelReadTimeout()
 		if err != nil {

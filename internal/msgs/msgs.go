@@ -16,13 +16,16 @@ cl <---  *conn ----  srv
 cl ----  OPEN ---->  conn
          name
                      conn  ----- Allocdoc ----->  srv
-                     conn  <----   *doc  -------  srv
-                     conn  -----   open    ---->  doc
-                     conn  <------ fd    -------  doc
-                     conn  <------ openresp ----  doc
-                     conn  <------ write  ------  doc
-cl <-- openresp  --  conn
-cl <--  write -----  conn
+                     conn  <---- Allocdocresp --  srv
+                     conn  ----- Open --------->  doc
+                     conn  <---- Openresp ------  doc
+                     conn  <---- Write ---------  doc
+cl <-- OPENRESP  --  conn
+cl <--  WRITE -----  conn
+cl ---- WRITE  --->  conn
+                     conn ------ Write -------->  doc
+                     conn <----- Writeresp -----  doc
+cl <-- WRITERESP --  conn
 
 */
 
@@ -51,18 +54,17 @@ type Openresp struct {
 	Fd   int
 }
 
-// processed by conn for doc
-type Writeresp struct {
-	Doc chan interface{}
-	Rev int
-}
-
 // processed by doc for conn and by conn for doc
 type Write struct {
 	Conn chan interface{}
 	Doc  chan interface{}
 	Rev  int
 	Ops  ot.Ops
+}
+
+type Writeresp struct {
+	Doc chan interface{}
+	Rev int
 }
 
 // processed by doc for tests
