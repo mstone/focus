@@ -7,7 +7,6 @@ package server
 import (
 	"net/http"
 	"path"
-	"runtime/debug"
 	"time"
 
 	"github.com/unrolled/render"
@@ -77,15 +76,13 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (s *Server) configure() error {
 	m := negroni.New()
 	m.Use(negroni.HandlerFunc(func(w http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
-		log.Info("server http response starting", "obj", "server", "method", r.Method, "path", r.URL.Path, "hdrs", r.Header)
 		next(w, r)
-		log.Info("server http response finished", "obj", "server", "method", r.Method, "path", r.URL.Path, "hdrs", r.Header)
 	}))
 	m.Use(negroni.HandlerFunc(func(w http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
 		defer func() {
 			r := recover()
 			if r != nil {
-				log.Error("http caught panic", "debugstack", debug.Stack())
+				log.Error("http caught panic", "panic", r)
 			}
 		}()
 		next(w, r)
@@ -104,7 +101,6 @@ func (s *Server) configure() error {
 	}
 
 	mux.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
-		log.Info("server starting websocket", "obj", "server", "remoteaddr", r.RemoteAddr, "hdrs", r.Header)
 		ws, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
 			log.Error("server unable to upgrade incoming websocket connection", "err", err)
@@ -120,11 +116,9 @@ func (s *Server) configure() error {
 		}
 
 		c.Run()
-		log.Info("server finished websocket", "obj", "server", "remoteaddr", r.RemoteAddr, "hdrs", r.Header)
 	})
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		log.Info("server offering pad", "obj", "server", "pad", r.URL.Path)
 		v := struct {
 			API, Name string
 		}{

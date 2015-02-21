@@ -1,5 +1,5 @@
 #!/bin/bash -eu
-go test -covermode=set -coverpkg=github.com/mstone/focus/ot,github.com/mstone/focus/server -c github.com/mstone/focus/server
+go test -covermode=set -coverpkg=github.com/mstone/focus/ot,github.com/mstone/focus/internal/server -c github.com/mstone/focus/internal/server
 
 until ! (./server.test -test.coverprofile=cover.err -test.run=Random &> focus.err); do
   echo test;

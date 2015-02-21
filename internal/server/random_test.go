@@ -25,8 +25,8 @@ type ws struct {
 }
 
 func NewWSPair() (*ws, *ws) {
-	q1 := make(chan interface{}, 25)
-	q2 := make(chan interface{}, 25)
+	q1 := make(chan interface{}, numClients*numRounds*2)
+	q2 := make(chan interface{}, numClients*numRounds*2)
 	w1 := &ws{
 		rq: q1,
 		wq: q2,
@@ -158,6 +158,7 @@ func (c *client) Send(ops ot.Ops) {
 		Ops: ops,
 	}
 	err := c.ws.WriteJSON(m)
+	c.ws.CancelWriteTimeout()
 	if err != nil {
 		panic("client unable to send WRITE: " + err.Error())
 	}
@@ -207,6 +208,7 @@ Loop:
 		m := msg.Msg{}
 		c.ws.SetReadTimeout(100 * time.Millisecond)
 		err := c.ws.ReadJSON(&m)
+		c.ws.CancelReadTimeout()
 		if err != nil {
 			log.Error("client unable to read response", "err", err)
 			break Loop
@@ -274,6 +276,7 @@ func TestRandom(t *testing.T) {
 			Cmd:  msg.C_OPEN,
 			Name: vpName,
 		})
+		conn.CancelWriteTimeout()
 		if err != nil {
 			t.Errorf("unable to write OPEN, err: %q", err)
 		}
@@ -282,6 +285,7 @@ func TestRandom(t *testing.T) {
 		m := msg.Msg{}
 		conn.SetReadTimeout(100 * time.Millisecond)
 		err = conn.ReadJSON(&m)
+		conn.CancelReadTimeout()
 		if err != nil {
 			t.Errorf("server unable to read OPEN_RESP, err: %q", err)
 		}
@@ -301,6 +305,7 @@ func TestRandom(t *testing.T) {
 		m = msg.Msg{}
 		conn.SetReadTimeout(100 * time.Millisecond)
 		err = conn.ReadJSON(&m)
+		conn.CancelReadTimeout()
 		if err != nil {
 			t.Errorf("server unable to read first WRITE, err: %q", err)
 		}
