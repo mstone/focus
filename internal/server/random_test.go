@@ -18,8 +18,8 @@ import (
 )
 
 const numClients = 100
-const numRounds = 40
-const numChars = 256
+const numRounds = 80
+const numChars = 4096
 
 type ws struct {
 	rq, wq chan interface{}
@@ -152,7 +152,7 @@ func (c *client) sendRandomOps() {
 }
 
 func (c *client) Send(ops ot.Ops) {
-	c.ws.SetWriteTimeout(100 * time.Millisecond)
+	c.ws.SetWriteTimeout(1000 * time.Millisecond)
 	m := msg.Msg{
 		Cmd: msg.C_WRITE,
 		Fd:  c.fd,
@@ -208,7 +208,7 @@ func (c *client) readLoop() {
 Loop:
 	for {
 		m := msg.Msg{}
-		c.ws.SetReadTimeout(100 * time.Millisecond)
+		c.ws.SetReadTimeout(1000 * time.Millisecond)
 		err := c.ws.ReadJSON(&m)
 		c.ws.CancelReadTimeout()
 		if err != nil {
@@ -272,7 +272,7 @@ func TestRandom(t *testing.T) {
 
 		focusSrv.AllocConn(conn2)
 
-		conn.SetWriteTimeout(100 * time.Millisecond)
+		conn.SetWriteTimeout(1000 * time.Millisecond)
 		err = conn.WriteJSON(msg.Msg{
 			Cmd:  msg.C_OPEN,
 			Name: vpName,
@@ -284,7 +284,7 @@ func TestRandom(t *testing.T) {
 
 		// read open resp
 		m := msg.Msg{}
-		conn.SetReadTimeout(100 * time.Millisecond)
+		conn.SetReadTimeout(1000 * time.Millisecond)
 		err = conn.ReadJSON(&m)
 		conn.CancelReadTimeout()
 		if err != nil {
@@ -304,7 +304,7 @@ func TestRandom(t *testing.T) {
 
 		// read open resp
 		m = msg.Msg{}
-		conn.SetReadTimeout(100 * time.Millisecond)
+		conn.SetReadTimeout(1000 * time.Millisecond)
 		err = conn.ReadJSON(&m)
 		conn.CancelReadTimeout()
 		if err != nil {
