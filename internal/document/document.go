@@ -27,7 +27,7 @@ func New(srvr chan interface{}, name string) chan interface{} {
 		hist:  []ot.Ops{},
 		comp:  ot.Ops{},
 	}
-	go d.Run()
+	go d.readLoop()
 	return d.msgs
 }
 
@@ -35,10 +35,6 @@ func (d *doc) Body() string {
 	doc := ot.NewDoc()
 	doc.Apply(d.comp)
 	return doc.String()
-}
-
-func (d *doc) Run() {
-	go d.readLoop()
 }
 
 func (d *doc) openDescription(conn chan interface{}, reply chan im.Opencompletion) {

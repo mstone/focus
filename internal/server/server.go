@@ -23,10 +23,11 @@ func New() (*Server, error) {
 		nextFd:   0,
 		nextConn: 0,
 	}
+	go s.readLoop()
 	return s, nil
 }
 
-func (s *Server) openDoc(w chan im.Allocdocresp, name string) {
+func (s *Server) onAllocDoc(w chan im.Allocdocresp, name string) {
 	var d chan interface{}
 	var ok bool
 
@@ -41,7 +42,7 @@ func (s *Server) openDoc(w chan im.Allocdocresp, name string) {
 	}
 }
 
-func (s *Server) allocFd(reply chan im.Allocfdresp) {
+func (s *Server) onAllocFd(reply chan im.Allocfdresp) {
 	fd := s.nextFd
 	s.nextFd++
 	reply <- im.Allocfdresp{
@@ -50,7 +51,7 @@ func (s *Server) allocFd(reply chan im.Allocfdresp) {
 	}
 }
 
-func (s *Server) allocConn(reply chan im.Allocconnresp) {
+func (s *Server) onAllocConn(reply chan im.Allocconnresp) {
 	no := s.nextConn
 	s.nextConn++
 	reply <- im.Allocconnresp{
@@ -59,7 +60,7 @@ func (s *Server) allocConn(reply chan im.Allocconnresp) {
 	}
 }
 
-func (s *Server) AllocConn(ws connection.WebSocket) (chan interface{}, error) {
+func (s *Server) Connect(ws connection.WebSocket) (chan interface{}, error) {
 	srvrReplyChan := make(chan im.Allocconnresp)
 	s.msgs <- im.Allocconn{srvrReplyChan}
 	srvrResp := <-srvrReplyChan
@@ -76,17 +77,12 @@ func (s *Server) readLoop() {
 	for m := range s.msgs {
 		switch v := m.(type) {
 		default:
-			//s.l.Error("server got unknown msg", "cmd", m)
 		case im.Allocdoc:
-			s.openDoc(v.Reply, v.Name)
+			s.onAllocDoc(v.Reply, v.Name)
 		case im.Allocfd:
-			s.allocFd(v.Reply)
+			s.onAllocFd(v.Reply)
 		case im.Allocconn:
-			s.allocConn(v.Reply)
+			s.onAllocConn(v.Reply)
 		}
 	}
-}
-
-func (s *Server) Run() {
-	s.readLoop()
 }

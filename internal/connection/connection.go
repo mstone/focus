@@ -37,13 +37,9 @@ func New(srvr chan interface{}, ws WebSocket) chan interface{} {
 		docs: map[int]chan interface{}{},
 		srvr: srvr,
 	}
-	go c.Run()
-	return c.msgs
-}
-
-func (c *conn) Run() {
 	go c.readLoop()
 	go c.writeLoop()
+	return c.msgs
 }
 
 func (c *conn) Close() error {

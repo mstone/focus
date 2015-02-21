@@ -238,7 +238,6 @@ func TestRandom(t *testing.T) {
 	if err != nil {
 		t.Fatalf("err: %s ", err)
 	}
-	go focusSrv.Run()
 
 	wg := &sync.WaitGroup{}
 
@@ -273,7 +272,7 @@ func TestRandom(t *testing.T) {
 		)
 		clients[idx] = c
 
-		focusSrv.AllocConn(conn2)
+		focusSrv.Connect(conn2)
 
 		conn.SetWriteTimeout(1000 * time.Millisecond)
 		err = conn.WriteJSON(msg.Msg{
