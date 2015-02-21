@@ -3,8 +3,6 @@ package server
 import (
 	"fmt"
 	"github.com/mstone/focus/msg"
-	"reflect"
-	"strings"
 	"sync"
 	"time"
 
@@ -45,8 +43,6 @@ func (c *conn) Run() {
 	go c.readLoop()
 	go c.writeLoop()
 	c.wg.Wait()
-
-	c.l.Info("conn done; disconnecting client")
 }
 
 func (c *conn) Close() error {
@@ -62,11 +58,8 @@ func (c *conn) onVppOpen(m msg.Msg) {
 
 	srvrResp := <-srvrReplyChan
 	if srvrResp.err != nil {
-		c.l.Error("conn unable to Allocdoc", "err", srvrResp.err)
 		panic("conn unable to Allocdoc")
 	}
-
-	c.l.Info("conn finished Allocdoc, sending open", "cmd", m)
 
 	doc := srvrResp.doc
 	doc <- open{
@@ -80,17 +73,14 @@ func (c *conn) onVppOpen(m msg.Msg) {
 func (c *conn) onVppWrite(m msg.Msg) {
 	doc, ok := c.docs[m.Fd]
 	if !ok {
-		c.l.Error("conn got WRITE with bad fd, exiting")
 		panic("conn got WRITE with bad fd")
 	}
-	c.l.Info("conn enqueuing write for doc", "cmd", m, "doc", doc)
 	doc <- write{
 		dbgConn: c,
 		fd:      m.Fd,
 		rev:     m.Rev,
 		ops:     m.Ops,
 	}
-
 }
 
 func (c *conn) readLoop() {
@@ -100,23 +90,17 @@ func (c *conn) readLoop() {
 		var m msg.Msg
 
 		if err := c.ws.ReadJSON(&m); err != nil {
-			c.l.Error("conn read error; closing conn", "err", err)
 			c.Close() // BUG(mistone): errcheck?
 			return
 		}
 
 		switch m.Cmd {
 		default:
-			c.l.Error("conn got unknown cmd; exiting", "cmd", m)
 			return
 		case msg.C_OPEN:
-			c.l.Info("conn got OPEN, sending Allocdoc", "cmd", m)
 			c.onVppOpen(m)
-			c.l.Info("conn finished OPEN", "cmd", m)
 		case msg.C_WRITE:
-			c.l.Info("conn got WRITE", "cmd", m)
 			c.onVppWrite(m)
-			c.l.Info("conn finished WRITE", "cmd", m)
 		}
 		c.numRecv++
 	}
@@ -126,7 +110,6 @@ func (c *conn) writeLoop() {
 	defer c.wg.Done()
 
 	for m := range c.msgs {
-		c.l.Info("server writing "+strings.ToUpper(reflect.TypeOf(m).Name()), "cmd", m.(fmt.Stringer).String())
 		switch v := m.(type) {
 		case openresp:
 			c.docs[v.fd] = v.doc

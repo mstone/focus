@@ -15,6 +15,10 @@ import (
 	"github.com/mstone/focus/ot"
 )
 
+const numClients = 20
+const numRounds = 20
+const numChars = 16
+
 type ws struct {
 	rq, wq chan interface{}
 	rt, wt *time.Timer
@@ -109,8 +113,6 @@ func (c *client) sendRandomOps() {
 		}
 	}()
 
-	c.l.Info("client sending random ops", "name", c.name, "fd", c.fd)
-
 	ops := ot.Ops{}
 	f := fuzz.New().NilChance(0).Funcs(
 		func(p *ot.Ops, fc fuzz.Continue) {
@@ -142,15 +144,9 @@ func (c *client) sendRandomOps() {
 		},
 	)
 	f.NumElements(1, 1).Fuzz(&ops)
-	c.l.Info("client generated ops", "ops", ops)
 
-	c.l.Info("client send state", "state", c.st)
-	pdoc := c.doc.String()
 	c.doc.Apply(ops)
-	ndoc := c.doc.String()
-	pstate := c.st
 	c.st = c.st.Client(c, ops)
-	c.l.Info("client send returned", "action", "SEND", "ops", ops, "pdoc", pdoc, "ndoc", ndoc, "pstate", pstate, "nstate", c.st)
 }
 
 func (c *client) Send(ops ot.Ops) {
@@ -163,9 +159,8 @@ func (c *client) Send(ops ot.Ops) {
 	}
 	err := c.ws.WriteJSON(m)
 	if err != nil {
-		c.l.Error("client unable to send WRITE", "err", err)
+		panic("client unable to send WRITE: " + err.Error())
 	}
-	c.l.Info("client sent WRITE", "action", "SEND", "cmd", m)
 	c.numSend++
 }
 
@@ -174,13 +169,8 @@ func (c *client) String() string {
 }
 
 func (c *client) Recv(rev int, ops ot.Ops) {
-	c.l.Info("client recv", "rev", rev, "ops", ops)
-	pdoc := c.doc.String()
-	prev := c.rev
 	c.doc.Apply(ops)
 	c.rev = rev
-	ndoc := c.doc.String()
-	c.l.Info("client recv done", "action", "STAT", "fd", c.fd, "pdoc", pdoc, "ndoc", ndoc, "prev", prev, "nrev", c.rev, "pstate", c.st, "ops", ops)
 }
 
 func (c *client) Ack(rev int) {
@@ -191,8 +181,6 @@ func (c *client) onWriteResp(m msg.Msg) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	args := unpackMsg(m, "action", "RECV")
-	c.l.Info("client got WRITE_RESP", args...)
 	c.st = c.st.Ack(c, m.Rev)
 }
 
@@ -200,8 +188,6 @@ func (c *client) onWrite(m msg.Msg) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	args := unpackMsg(m, "action", "RECV")
-	c.l.Info("client got WRITE", args...)
 	c.st = c.st.Server(c, m.Rev, m.Ops)
 }
 
@@ -211,8 +197,6 @@ func (c *client) writeLoop() {
 	for i := 0; i < numRounds; i++ {
 		c.sendRandomOps()
 	}
-
-	c.l.Info("client finished writeLoop", "action", "STAT", "rev", c.rev, "body", c.doc.String(), "state", c.st)
 }
 
 func (c *client) readLoop() {
@@ -224,10 +208,9 @@ Loop:
 		c.ws.SetReadTimeout(100 * time.Millisecond)
 		err := c.ws.ReadJSON(&m)
 		if err != nil {
-			c.l.Error("client unable to read response", "err", err)
+			log.Error("client unable to read response", "err", err)
 			break Loop
 		}
-		c.l.Info("client read msg", "client", c, "cmd", m)
 		switch m.Cmd {
 		case msg.C_WRITE_RESP:
 			c.onWriteResp(m)
@@ -236,12 +219,7 @@ Loop:
 		}
 		c.numRecv++
 	}
-	c.l.Info("client finished readLoop", "action", "STAT", "rev", c.rev, "body", c.doc.String(), "state", c.st)
 }
-
-const numClients = 20
-const numRounds = 20
-const numChars = 16
 
 func TestRandom(t *testing.T) {
 	go func() {
@@ -291,7 +269,6 @@ func TestRandom(t *testing.T) {
 		srvConn, _ := focusSrv.AllocConn(conn2)
 		go srvConn.Run()
 
-		c.l.Info("client sending OPEN", "name", vpName)
 		conn.SetWriteTimeout(100 * time.Millisecond)
 		err = conn.WriteJSON(msg.Msg{
 			Cmd:  msg.C_OPEN,
@@ -301,7 +278,6 @@ func TestRandom(t *testing.T) {
 			t.Errorf("unable to write OPEN, err: %q", err)
 		}
 
-		c.l.Info("client awaiting OPEN_RESP", "name", vpName)
 		// read open resp
 		m := msg.Msg{}
 		conn.SetReadTimeout(100 * time.Millisecond)
@@ -320,9 +296,7 @@ func TestRandom(t *testing.T) {
 		}
 		c.name = vpName
 		c.fd = m.Fd
-		c.l.Info("client got OPEN_RESP", "action", "RECV", "cmd", m)
 
-		c.l.Info("client awaiting first WRITE", "name", vpName)
 		// read open resp
 		m = msg.Msg{}
 		conn.SetReadTimeout(100 * time.Millisecond)
@@ -341,12 +315,10 @@ func TestRandom(t *testing.T) {
 		}
 		c.onWrite(m)
 
-		c.l.Info("client starting reading + writing", "name", c.name, "fd", c.fd)
 		cwg.Add(2)
 		go c.writeLoop()
 		go c.readLoop()
 		cwg.Wait()
-		c.l.Info("client done")
 	}
 
 	wg.Add(numClients)
@@ -356,7 +328,6 @@ func TestRandom(t *testing.T) {
 	wg.Wait()
 
 	d := focusSrv.names["/"]
-	d.l.Info("server doc final state", "action", "STAT", "rev", len(d.hist), "comp", d.comp, "hist", d.hist, "body", d.Body())
 	t.Logf("server doc: %s", d.String())
 	sd := d.Body()
 	for i := 0; i < numClients; i++ {

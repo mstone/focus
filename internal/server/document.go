@@ -38,21 +38,17 @@ func (d *doc) Body() string {
 }
 
 func (d *doc) Run() {
-	d.l.Info("new doc running")
 	d.wg.Add(1)
 	go d.readLoop()
 	d.wg.Wait()
 }
 
 func (d *doc) openDescription(dbgConn *conn, conn chan interface{}) {
-	d.l.Info("doc opening description", "conn", conn)
-
 	srvrReplyChan := make(chan allocfdresp)
 	d.srvr <- allocfd{srvrReplyChan}
 	srvrResp := <-srvrReplyChan
 
 	if srvrResp.err != nil {
-		d.l.Error("doc unable to allocfd; sending err to conn", "err", srvrResp.err)
 		conn <- openresp{
 			err: srvrResp.err,
 		}
@@ -62,7 +58,6 @@ func (d *doc) openDescription(dbgConn *conn, conn chan interface{}) {
 	fd := srvrResp.fd
 
 	d.conns[fd] = dconn{conn, dbgConn}
-	d.l.Info("doc received description", "fd", fd)
 
 	m := openresp{
 		dbgConn: dbgConn,
@@ -71,8 +66,6 @@ func (d *doc) openDescription(dbgConn *conn, conn chan interface{}) {
 		fd:      fd,
 		name:    d.name,
 	}
-	args := unpackMsg(m, "action", "SEND")
-	d.l.Info("doc sending fd to conn", args...)
 	conn <- m
 
 	rev := len(d.hist)
@@ -82,11 +75,7 @@ func (d *doc) openDescription(dbgConn *conn, conn chan interface{}) {
 		rev:     rev,
 		ops:     d.comp,
 	}
-	args2 := unpackMsg(m2, "action", "SEND")
-	d.l.Info("doc sending initial write", args2...)
 	conn <- m2
-
-	d.l.Info("doc finished opening description", "conn", conn, "fd", fd)
 }
 
 func unpackMsg(m interface{}, b ...interface{}) []interface{} {
@@ -118,59 +107,45 @@ func (d *doc) readLoop() {
 	defer d.wg.Done()
 
 	for m := range d.msgs {
-		// d.l.Info("doc got msg", "action", "RECV", "cmd", m)
-		args := unpackMsg(m, "action", "RECV")
-		d.l.Info("doc got msg", args...)
 		switch v := m.(type) {
 		default:
-			d.l.Error("doc read unknown message", "cmd", v)
 			panic("doc read unknown message")
 		case open:
 			d.openDescription(v.dbgConn, v.conn)
 		case write:
 			conn, ok := d.conns[v.fd]
 			if !ok {
-				d.l.Error("doc got write with unknown fd, exiting")
 				panic("doc got write with unknown fd")
 			}
-			d.l.Info("doc transforming", "cmd", v)
 			rev, ops := d.transform(v.rev, v.ops)
-			d.l.Info("doc broadcasting", "cmd", v)
 			d.broadcast(conn, v.fd, rev, ops)
 		}
 	}
 }
 
 func (d *doc) transform(rev int, ops ot.Ops) (int, ot.Ops) {
-	d.l.Info("doc transforming ops")
-
 	// extract concurrent ops
 	concurrentOps := []ot.Ops{}
 	if rev < len(d.hist) {
 		concurrentOps = d.hist[rev:]
 	}
-	d.l.Info("doc found concurrent ops-lists", "num", len(concurrentOps), "val", concurrentOps)
 
 	// compose concurrent ops
 	composedOps := ot.Ops{}
 	for _, concurrentOp := range concurrentOps {
 		composedOps = ot.Compose(composedOps, concurrentOp)
 	}
-	d.l.Info("doc composed concurrent ops", "num", len(composedOps), "val", composedOps)
 
 	// produce transformed ops
 	transformedOps, _ := ot.Transform(ops, composedOps)
-	d.l.Info("doc transformed ops", "action", "XFRM", "ops", ops, "cops", composedOps, "tops", transformedOps)
 
+	// update history
 	d.hist = append(d.hist, transformedOps)
 
 	// update composed ops for new conns
-	prev := d.comp
 	d.comp = ot.Compose(d.comp, transformedOps)
-	d.l.Info("doc composed transformed ops", "action", "COMP", "prev", prev, "comp", d.comp)
 
 	rev = len(d.hist)
-	d.l.Info("doc state", "action", "STAT", "rev", rev, "comp", d.comp, "hist", d.hist, "body", d.Body())
 
 	return rev, transformedOps
 }
@@ -183,8 +158,6 @@ func (d *doc) broadcast(conn dconn, fd int, rev int, ops ot.Ops) {
 				fd:      pfd,
 				rev:     rev,
 			}
-			args := unpackMsg(m, "action", "SEND")
-			d.l.Info("doc enqueueing WRITE_RESP", args...)
 			pconn.conn <- m
 		} else {
 			m := write{
@@ -193,8 +166,6 @@ func (d *doc) broadcast(conn dconn, fd int, rev int, ops ot.Ops) {
 				rev:     rev,
 				ops:     ops,
 			}
-			args := unpackMsg(m, "action", "SEND")
-			d.l.Info("doc enqueueing WRITE", args...)
 			pconn.conn <- m
 		}
 	}

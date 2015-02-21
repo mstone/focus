@@ -3,8 +3,9 @@ package server
 import (
 	"sync"
 
-	"github.com/mstone/focus/ot"
 	log "gopkg.in/inconshreveable/log15.v2"
+
+	"github.com/mstone/focus/ot"
 )
 
 type Server struct {
@@ -33,7 +34,6 @@ func (s *Server) addConn(c *conn) {
 }
 
 func (s *Server) openDoc(w chan allocdocresp, name string) {
-	s.l.Info("server got Allocdoc", "name", name)
 	d, ok := s.names[name]
 	if !ok {
 		d = &doc{
@@ -45,41 +45,31 @@ func (s *Server) openDoc(w chan allocdocresp, name string) {
 			hist:  []ot.Ops{},
 			comp:  ot.Ops{},
 		}
-		d.l = log.New(
-			"obj", "doc",
-			"doc", log.Lazy{d.String},
-		)
 		s.names[name] = d
 		go d.Run()
 	}
-	s.l.Info("server sending Allocdocresp", "doc", d)
 	w <- allocdocresp{
 		err: nil,
 		doc: d.msgs,
 	}
-	s.l.Info("server finished Allocdoc", "name", name)
 }
 
 func (s *Server) allocFd(reply chan allocfdresp) {
 	fd := s.nextFd
 	s.nextFd++
-	s.l.Info("server allocating fd", "fd", fd)
 	reply <- allocfdresp{
 		err: nil,
 		fd:  fd,
 	}
-	s.l.Info("server sent allocfdresp", "fd", fd)
 }
 
 func (s *Server) allocConn(reply chan allocconnresp) {
 	no := s.nextConn
 	s.nextConn++
-	s.l.Info("server allocating conn", "conn", no)
 	reply <- allocconnresp{
 		err: nil,
 		no:  no,
 	}
-	s.l.Info("server sent Allocconnresp", "conn", no)
 }
 
 func (s *Server) AllocConn(ws WebSocket) (*conn, error) {
@@ -101,14 +91,6 @@ func (s *Server) AllocConn(ws WebSocket) (*conn, error) {
 		docs:    map[int]chan interface{}{},
 		srvr:    s.msgs,
 	}
-
-	c.l = log.New(
-		"obj", "conn",
-		"conn", log.Lazy{c.String},
-		// "numSend", log.Lazy{func() int { return c.numSend }},
-		// "numRecv", log.Lazy{func() int { return c.numRecv }},
-		// "total", log.Lazy{func() int { return c.numSend + c.numRecv }},
-	)
 
 	return c, nil
 }
