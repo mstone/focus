@@ -380,10 +380,10 @@ func Transform(as, bs Ops) (Ops, Ops) {
 
 	var loopCount = -1
 
-	fmt.Printf("xform: as: %s, bs: %s, a: %s, b: %s, ai: %d, bi: %d\n", as, bs, a, b, ai, bi)
+	// fmt.Printf("xform: as: %s, bs: %s, a: %s, b: %s, ai: %d, bi: %d\n", as, bs, a, b, ai, bi)
 	for {
 		loopCount++
-		fmt.Printf("loop: %d, a: %s, b: %s, ai: %d, bi: %d\n", loopCount, a, b, ai, bi)
+		// fmt.Printf("loop: %d, a: %s, b: %s, ai: %d, bi: %d\n", loopCount, a, b, ai, bi)
 
 		if a == nil && b == nil {
 			break
@@ -428,9 +428,9 @@ func Transform(as, bs Ops) (Ops, Ops) {
 		case a.IsRetain() && b.IsDelete():
 			bos.Delete(minlen)
 		}
-		a2, b2 := a, b
+		// a2, b2 := a, b
 		a, b = shortenOps(a, b)
-		fmt.Printf("shorten:\n\ta : %s\n\tb : %s\n\ta2: %s\n\tb2: %s\n", a2, b2, a, b)
+		// fmt.Printf("shorten:\n\ta : %s\n\tb : %s\n\ta2: %s\n\tb2: %s\n", a2, b2, a, b)
 		if a == nil {
 			ai++
 			if ai < al {
