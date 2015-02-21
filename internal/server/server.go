@@ -51,24 +51,7 @@ func (s *Server) onAllocFd(reply chan im.Allocfdresp) {
 	}
 }
 
-func (s *Server) onAllocConn(reply chan im.Allocconnresp) {
-	no := s.nextConn
-	s.nextConn++
-	reply <- im.Allocconnresp{
-		Err: nil,
-		No:  no,
-	}
-}
-
 func (s *Server) Connect(ws connection.WebSocket) (chan interface{}, error) {
-	srvrReplyChan := make(chan im.Allocconnresp)
-	s.msgs <- im.Allocconn{srvrReplyChan}
-	srvrResp := <-srvrReplyChan
-
-	if srvrResp.Err != nil {
-		return nil, srvrResp.Err
-	}
-
 	c := connection.New(s.msgs, ws)
 	return c, nil
 }
@@ -81,8 +64,6 @@ func (s *Server) readLoop() {
 			s.onAllocDoc(v.Reply, v.Name)
 		case im.Allocfd:
 			s.onAllocFd(v.Reply)
-		case im.Allocconn:
-			s.onAllocConn(v.Reply)
 		}
 	}
 }

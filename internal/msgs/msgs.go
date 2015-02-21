@@ -68,16 +68,6 @@ type Allocfdresp struct {
 	Fd  int
 }
 
-// processed by Server for server
-type Allocconn struct {
-	Reply chan Allocconnresp
-}
-
-type Allocconnresp struct {
-	Err error
-	No  int
-}
-
 // processed by conn for doc
 
 type Writeresp struct {
