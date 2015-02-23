@@ -53,14 +53,16 @@ func (s *Synchronized) String() string {
 }
 
 func (s *Synchronized) Client(c Client, ops Ops) State {
-	c.Send(ops)
+	ops2 := ops.Clone()
+	ops3 := ops.Clone()
+	c.Send(ops2)
 	return &Waiting{
-		inflight: ops,
+		inflight: ops3,
 	}
 }
 
 func (s *Synchronized) Server(c Client, rev int, ops Ops) State {
-	c.Recv(rev, ops)
+	c.Recv(rev, ops.Clone())
 	return s
 }
 
@@ -78,16 +80,16 @@ func (w *Waiting) String() string {
 
 func (w *Waiting) Client(c Client, ops Ops) State {
 	return &Buffering{
-		inflight: w.inflight,
-		waiting:  ops,
+		inflight: w.inflight.Clone(),
+		waiting:  ops.Clone(),
 	}
 }
 
 func (w *Waiting) Server(c Client, rev int, ops Ops) State {
-	inflight2, ops2 := Transform(w.inflight, ops)
-	c.Recv(rev, ops2)
+	inflight2, ops2 := Transform(w.inflight.Clone(), ops.Clone())
+	c.Recv(rev, ops2.Clone())
 	return &Waiting{
-		inflight: inflight2,
+		inflight: inflight2.Clone(),
 	}
 }
 
@@ -107,8 +109,8 @@ func (b *Buffering) String() string {
 
 func (b *Buffering) Client(c Client, ops Ops) State {
 	return &Buffering{
-		inflight: b.inflight,
-		waiting:  Compose(b.waiting, ops),
+		inflight: b.inflight.Clone(),
+		waiting:  Compose(b.waiting.Clone(), ops.Clone()),
 	}
 }
 
@@ -123,25 +125,25 @@ func (b *Buffering) Server(c Client, rev int, ops Ops) State {
 	      *
 	*/
 
-	i := b.inflight
-	o := ops
-	w := b.waiting
+	i := b.inflight.Clone()
+	o := ops.Clone()
+	w := b.waiting.Clone()
 
 	i2, o2 := Transform(i, o)
 	w2, o3 := Transform(w, o2)
 
-	c.Recv(rev, o3)
+	c.Recv(rev, o3.Clone())
 	return &Buffering{
-		inflight: i2,
-		waiting:  w2,
+		inflight: i2.Clone(),
+		waiting:  w2.Clone(),
 	}
 }
 
 func (b *Buffering) Ack(c Client, rev int) State {
 	c.Ack(rev)
-	c.Send(b.waiting)
+	c.Send(b.waiting.Clone())
 	return &Waiting{
-		inflight: b.waiting,
+		inflight: b.waiting.Clone(),
 	}
 }
 

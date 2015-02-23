@@ -34,6 +34,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 	"unicode/utf8"
 )
 
@@ -270,12 +271,21 @@ func (o Op) Shorten(nl int) Op {
 	case o.IsDelete():
 		o.Size += nl
 	case o.IsInsert():
-		o.Body = o.Body[nl:]
+		// BUG(mistone): mutation?
+		// o.Body = o.Body[nl:]
+		body := make([]rune, len(o.Body)-nl)
+		copy(body, o.Body[nl:])
+		o.Body = body
 	}
 	return o
 }
 
 func shortenOps(a *Op, b *Op) (*Op, *Op) {
+	a3 := a.Clone()
+	b3 := b.Clone()
+	a = &a3
+	b = &b3
+
 	la := a.Len()
 	lb := b.Len()
 	switch {
@@ -292,6 +302,11 @@ func shortenOps(a *Op, b *Op) (*Op, *Op) {
 }
 
 func Compose(as, bs Ops) Ops {
+	as2 := as.Clone()
+	bs2 := bs.Clone()
+	as = as2
+	bs = bs2
+
 	ops := Ops{}
 
 	if len(as) == 0 {
@@ -355,7 +370,13 @@ Fix:
 	return ops
 }
 
+/*
 func Transform(as, bs Ops) (Ops, Ops) {
+	as2 := as.Clone()
+	bs2 := bs.Clone()
+	as = as2
+	bs = bs2
+
 	var ai, bi int
 	var al, bl int
 	var aos, bos Ops
@@ -451,8 +472,71 @@ func Transform(as, bs Ops) (Ops, Ops) {
 
 	return aos, bos
 }
+*/
+
+func Transform(as, bs Ops) (Ops, Ops) {
+	var a, b *Op
+	var aos, bos Ops
+
+Fix:
+	for {
+		switch {
+		case len(as) == 0 && len(bs) == 0:
+			break Fix
+		case len(as) > 0 && as.First().IsInsert():
+			a = as.First()
+			aos.Insert(a.Body)
+			bos.Retain(a.Len())
+			as = as.Rest()
+			continue
+		case len(bs) > 0 && bs.First().IsInsert():
+			b = bs.First()
+			aos.Retain(b.Len())
+			bos.Insert(b.Body)
+			bs = bs.Rest()
+			continue
+		case len(as) > 0 && len(bs) > 0:
+			a = as.First()
+			b = bs.First()
+			minlen := min(a.Len(), b.Len())
+			switch {
+			case a.IsRetain() && b.IsRetain():
+				aos.Retain(minlen)
+				bos.Retain(minlen)
+			case a.IsDelete() && b.IsRetain():
+				aos.Delete(minlen)
+			case a.IsRetain() && b.IsDelete():
+				bos.Delete(minlen)
+			}
+			a, b = shortenOps(a, b)
+			if a == nil {
+				as = as.Rest()
+			} else {
+				as = append(Ops{*a}, as.Rest()...)
+			}
+			if b == nil {
+				bs = bs.Rest()
+			} else {
+				bs = append(Ops{*b}, bs.Rest()...)
+			}
+			continue
+		case len(as) > 0 && len(bs) == 0:
+			aos = append(aos, as...)
+			return aos, bos
+		case len(as) == 0 && len(bs) > 0:
+			bos = append(bos, bs...)
+			return aos, bos
+		default:
+			panic("oops!")
+		}
+	}
+
+	return aos, bos
+}
 
 func Normalize(os Ops) Ops {
+	os3 := os.Clone()
+	os = os3
 	os2 := Ops{}
 	for _, o := range os {
 		if o.Len() != 0 {
@@ -463,21 +547,32 @@ func Normalize(os Ops) Ops {
 }
 
 type Doc struct {
+	mu sync.Mutex
 	// Current text
 	body []rune
 }
 
 func NewDoc() *Doc {
-	return &Doc{
-		body: []rune{},
-	}
+	d := new(Doc)
+	d.body = make([]rune, 0)
+	return d
+	// return &Doc{
+	// 	mu:   sync.Mutex{},
+	// 	body: make([]rune{},
+	// }
 }
 
 func (d *Doc) Len() int {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
 	return len(d.body)
 }
 
 func (d *Doc) String() string {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
 	buf := bytes.Buffer{}
 	for _, r := range d.body {
 		buf.WriteRune(r)
@@ -486,6 +581,12 @@ func (d *Doc) String() string {
 }
 
 func (d *Doc) Apply(os Ops) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	os2 := os.Clone()
+	os = os2
+
 	if len(os) == 0 {
 		return
 	}

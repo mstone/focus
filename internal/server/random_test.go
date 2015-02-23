@@ -4,15 +4,14 @@
 package server
 
 import (
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
-	"runtime/debug"
+	log "gopkg.in/inconshreveable/log15.v2"
+	"math/big"
 	"sync"
 	"testing"
 	"time"
-
-	fuzz "github.com/google/gofuzz"
-	log "gopkg.in/inconshreveable/log15.v2"
 
 	"github.com/mstone/focus/internal/connection"
 	im "github.com/mstone/focus/internal/msgs"
@@ -20,8 +19,12 @@ import (
 	"github.com/mstone/focus/ot"
 )
 
-const numClients = 9
-const numRounds = 3
+// const numClients = 4
+// const numRounds = 3
+// const numChars = 8
+
+const numClients = 10
+const numRounds = 1
 const numChars = 8
 
 type ws struct {
@@ -107,51 +110,45 @@ type client struct {
 	l       log.Logger
 }
 
+func randIntn(n int) int {
+	b, _ := rand.Int(rand.Reader, big.NewInt(int64(n)))
+	return int(b.Int64())
+}
+
 func (c *client) sendRandomOps() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	defer func() {
-		err := recover()
-		if err != nil {
-			c.l.Error("client caught panic", "err", err, "debugstack", debug.Stack())
-		}
-	}()
-
 	ops := ot.Ops{}
-	f := fuzz.New().NilChance(0).Funcs(
-		func(p *ot.Ops, fc fuzz.Continue) {
-			size := c.doc.Len()
-			op := 0
-			if size > 0 {
-				op = fc.Intn(2)
+	size := c.doc.Len()
+	op := 0
+	if size > 0 {
+		op = randIntn(2)
+	}
+	switch op {
+	case 0: // insert
+		s := fmt.Sprintf("%x", randIntn(numChars))
+		pos := 0
+		if size > 0 {
+			pos = randIntn(size)
+		}
+		ops = ot.NewInsert(size, pos, s)
+	case 1: // delete
+		if size == 1 {
+			ops = ot.NewDelete(1, 0, 1)
+		} else {
+			d := randIntn(size)
+			pos := 0
+			if size-d > 0 {
+				pos = randIntn(size - d)
 			}
-			switch op {
-			case 0:
-				s := fmt.Sprintf("%x", fc.Intn(numChars))
-				pos := 0
-				if size > 0 {
-					pos = fc.Intn(size)
-				}
-				*p = ot.NewInsert(size, pos, s)
-			case 1:
-				if size == 1 {
-					*p = ot.NewDelete(1, 0, 1)
-				} else {
-					d := fc.Intn(size)
-					pos := 0
-					if size-d > 0 {
-						pos = fc.Intn(size - d)
-					}
-					*p = ot.NewDelete(size, pos, d)
-				}
-			}
-		},
-	)
-	f.NumElements(1, 1).Fuzz(&ops)
+			ops = ot.NewDelete(size, pos, d)
+		}
+	}
 
-	c.doc.Apply(ops)
-	c.st = c.st.Client(c, ops)
+	c.l.Info("genn", "ops", ops, "docsize", size, "doc", c.doc.String(), "docp", fmt.Sprintf("%p", c.doc))
+	c.doc.Apply(ops.Clone())
+	c.st = c.st.Client(c, ops.Clone())
 }
 
 func (c *client) Send(ops ot.Ops) {
@@ -160,8 +157,9 @@ func (c *client) Send(ops ot.Ops) {
 		Cmd: msg.C_WRITE,
 		Fd:  c.fd,
 		Rev: c.rev,
-		Ops: ops,
+		Ops: ops.Clone(),
 	}
+	c.l.Info("send", "num", c.numSend, "rev", c.rev, "ops", ops)
 	err := c.ws.WriteJSON(m)
 	c.ws.CancelWriteTimeout()
 	if err != nil {
@@ -175,11 +173,13 @@ func (c *client) String() string {
 }
 
 func (c *client) Recv(rev int, ops ot.Ops) {
-	c.doc.Apply(ops)
+	// c.l.Info("recv", "num", c.numRecv, "kind", "wrt", "rev", rev, "ops", ops, "clnrev", c.rev, "clnhist", c.doc.String())
+	c.doc.Apply(ops.Clone())
 	c.rev = rev
 }
 
 func (c *client) Ack(rev int) {
+	// c.l.Info("recv", "num", c.numRecv, "kind", "ack", "rev", rev, "clnrev", c.rev, "clnhist", c.doc.String())
 	c.rev = rev
 }
 
@@ -194,7 +194,7 @@ func (c *client) onWrite(m msg.Msg) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	c.st = c.st.Server(c, m.Rev, m.Ops)
+	c.st = c.st.Server(c, m.Rev, m.Ops.Clone())
 }
 
 func (c *client) writeLoop() {
@@ -211,7 +211,7 @@ func (c *client) readLoop() {
 Loop:
 	for {
 		m := msg.Msg{}
-		c.ws.SetReadTimeout(100 * time.Millisecond)
+		c.ws.SetReadTimeout(500 * time.Millisecond)
 		err := c.ws.ReadJSON(&m)
 		c.ws.CancelReadTimeout()
 		if err != nil {
@@ -228,12 +228,8 @@ Loop:
 	}
 }
 
-func TestRandom(t *testing.T) {
-	go func() {
-		time.Sleep(10000 * time.Millisecond)
-		panic("boom")
-	}()
-
+func testOnce(t *testing.T) {
+	log.Crit("boot")
 	focusSrv, err := New()
 	if err != nil {
 		t.Fatalf("err: %s ", err)
@@ -244,6 +240,7 @@ func TestRandom(t *testing.T) {
 	clients := make([]*client, numClients)
 
 	run := func(idx int) {
+		var err error
 		defer wg.Done()
 
 		// BUG(mistone): OPEN / really should probably fail, though we'll test that it works today.
@@ -264,11 +261,11 @@ func TestRandom(t *testing.T) {
 			ws:     conn,
 		}
 		c.l = log.New(
-			"obj", "client",
+			"obj", "cln",
 			"client", log.Lazy{c.String},
-			// "numSend", log.Lazy{func() int { return c.numSend }},
-			// "numRecv", log.Lazy{func() int { return c.numRecv }},
-			// "totalMsgs", log.Lazy{func() int { return c.numSend + c.numRecv }},
+			"#", log.Lazy{func() int {
+				return c.numRecv + c.numSend
+			}},
 		)
 		clients[idx] = c
 
@@ -343,13 +340,19 @@ func TestRandom(t *testing.T) {
 	for i := 0; i < numClients; i++ {
 		s1 := clients[i].doc.String()
 		if sd != s1 {
-			t.Errorf("error, doc[%d] != server doc\n\t%q\n\t%q", i, s1, sd)
+			t.Fatalf("error, doc[%d] != server doc\n\t%q\n\t%q", i, s1, sd)
 		}
 		for j := i + 1; j < numClients; j++ {
 			s2 := clients[j].doc.String()
 			if s1 != s2 {
-				t.Errorf("error, doc[%d] != doc[%d]\n\t%q\n\t%q", i, j, s1, s2)
+				t.Fatalf("error, doc[%d] != doc[%d]\n\t%q\n\t%q", i, j, s1, s2)
 			}
 		}
+	}
+}
+
+func TestRandom(t *testing.T) {
+	for i := 0; i < 90; i++ {
+		testOnce(t)
 	}
 }

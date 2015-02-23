@@ -116,13 +116,13 @@ func (c *conn) onVppWrite(m msg.Msg) {
 	doc <- im.Write{
 		Conn: c.msgs,
 		Rev:  m.Rev,
-		Ops:  m.Ops,
+		Ops:  m.Ops.Clone(),
 	}
 }
 
 func (c *conn) readLoop() {
 	for {
-		var m msg.Msg
+		m := msg.Msg{}
 
 		if err := c.ws.ReadJSON(&m); err != nil {
 			c.Close() // BUG(mistone): errcheck?
@@ -168,7 +168,7 @@ func (c *conn) writeLoop() {
 				Cmd: msg.C_WRITE,
 				Fd:  fd,
 				Rev: v.Rev,
-				Ops: v.Ops,
+				Ops: v.Ops.Clone(),
 			})
 		}
 	}
