@@ -17,31 +17,37 @@ import (
 var in = flag.String("i", "focus.err", "input file")
 var out = flag.String("o", "-", "output file")
 var numClients = flag.Int("c", 4, "number of clients")
-var numDocs = flag.Int("d", 1, "number of clients")
+var numDocs = flag.Int("d", 1, "number of documents")
 
 type Record struct {
-	Msg    string
-	Obj    string
-	Action string
-	Cmd    string
-	Conn   int
-	Doc    string
-	Client int
-	Name   string
-	Fd     int
-	Rev    int
-	Ops    string
-	Comp   string
-	Hist   string
-	Body   string
-	From   string
-	To     string
-	Pdoc   string
-	Ndoc   string
-	Prev   string
-	Nrev   string
-	Pstate string
-	Nstate string
+	Msg     string
+	Obj     string
+	Action  string
+	Cmd     string
+	Conn    int
+	Doc     string
+	Client  int
+	Name    string
+	Fd      int
+	Rev     int
+	Ops     string
+	Comp    string
+	Hist    string
+	Body    string
+	From    string
+	To      string
+	Pdoc    string
+	Ndoc    string
+	Prev    string
+	Nrev    string
+	Pstate  string
+	Nstate  string
+	Kind    string
+	Clnst   string
+	Clnhist string
+	Docrev  int
+	Dochist string
+	Tops    string
 }
 
 func main() {
@@ -159,13 +165,11 @@ func main() {
 		outf.WriteString(fmt.Sprintf(`            \newthreadx{1}{d%d}{Doc %d}`+"\n", i, i))
 	}
 	for i := 0; i < *numClients; i++ {
-		outf.WriteString(fmt.Sprintf(`            \newthreadx{2}{c%d}{Client %d}`+"\n", i, i))
+		outf.WriteString(fmt.Sprintf(`            \newthreadx{3}{c%d}{Client %d}`+"\n", i, i))
 	}
 
 	scanner := bufio.NewScanner(inf)
-	var rec, prev Record
-
-	fdmap := map[int]int{}
+	var rec Record
 
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -175,92 +179,57 @@ func main() {
 			log.Error("unmarshal err", "line", line, "err", err)
 		}
 
-		if rec.Obj == "client" {
-			log.Info("found record", "rec", rec)
-			switch rec.Action {
-			case "SEND":
+		if rec.Obj == "cln" {
+			switch rec.Msg {
+			case "genn":
 				at := fmt.Sprintf("c%d", rec.Client)
-				before := fmt.Sprintf("send [%s], %s", rec.Pdoc, rec.Ops)
-				after := fmt.Sprintf("[%s]", rec.Ndoc)
-				if rec.Msg == "client send returned" {
-					outf.WriteString(fmt.Sprintf(`\begin{callself}{%s}{\footnotesize %s}{\footnotesize %s}
-					\end{callself}`+"\n", at, before, after))
-					// \node [right=2mm of sc\thecallevel] {\footnotesize %s};
+				before := fmt.Sprintf("gen %s : %s : %s", rec.Ops, rec.Clnst, rec.Clnhist)
+				after := fmt.Sprintf("")
+				fmt.Fprintf(outf, `\begin{callself}{%s}{\footnotesize %s}{\footnotesize %s}
+				\end{callself}`+"\n", at, before, after)
+			case "stat":
+				at := fmt.Sprintf("c%d", rec.Client)
+				before := fmt.Sprintf("stat %s : %s", rec.Body, rec.Clnst)
+				after := fmt.Sprintf("")
+				fmt.Fprintf(outf, `\begin{callself}{%s}{\footnotesize %s}{\footnotesize %s}
+				\end{callself}`+"\n", at, before, after)
+			case "recv":
+				from := "d0"
+				var label string
+				switch rec.Kind {
+				case "wrt":
+					label = fmt.Sprintf("wrt %d %s : %s : %s", rec.Rev, rec.Ops, rec.Clnst, rec.Clnhist)
+				case "ack":
+					label = fmt.Sprintf("ack %d", rec.Rev)
 				}
-			case "STAT":
-				at := fmt.Sprintf("c%d", fdmap[rec.Fd])
-				before := fmt.Sprintf("recv %s [%s]", rec.Ops, rec.Pdoc)
-				after := fmt.Sprintf("[%s]", rec.Ndoc)
-				if rec.Msg == "client recv done" && prev.Action == "SEND" {
-					// (#2)+(0,-\theseqlevel*\unitfactor-0.7*\unitfactor) node (mess from) {};
-					// outf.WriteString(fmt.Sprintf("\\node [below right=0mm of mess to] {[%s]};", contents))
-					outf.WriteString(fmt.Sprintf("\\begin{callself}{%s}{\\footnotesize %s}{\\footnotesize %s}\\end{callself}\n", at, before, after))
-					// outf.WriteString(fmt.Sprintf("            (%s)+(0,-\\theseqlevel*\\unitfactor-0.7*\\unitfactor) \\node (stat) {%s};\n", at, contents))
+				to := fmt.Sprintf("c%d", rec.Client)
+				dir := "R"
+				start := ""
+				end := ""
+				labelPos := ""
+				if rec.Conn%2 == 1 {
+					labelPos = "[midway, above right = -2mm and 10mm, font=\\footnotesize, blue]"
+				} else {
+					labelPos = "[midway, above, font=\\footnotesize, blue]"
 				}
+				fmt.Fprintf(outf, "            \\bloodymess[1]{%s}{%s}{%s}{%s}{%s}{%s}{%s}\n",
+					from, label, to, dir, start, end, labelPos)
 			}
 		}
 		if rec.Obj == "doc" {
-			if rec.Action == "SEND" || rec.Action == "RECV" || rec.Action == "STAT" {
-				// log.Info("found record", "rec", rec)
-
-				switch rec.Action {
-				case "STAT":
-					contents := rec.Body
-					if prev.Action == "RECV" {
-						outf.WriteString(fmt.Sprintf("            \\node [below left=0mm of mess to] {\\footnotesize [%s]};\n", contents))
-					}
-				case "SEND":
-					from := "d0"
-					var label string
-					switch rec.Cmd {
-					case "openresp":
-						label = fmt.Sprintf("%s %s %d", rec.Cmd, rec.Name, rec.Fd)
-						fdmap[rec.Fd] = rec.Conn
-					case "write":
-						label = fmt.Sprintf("%s %d %s", rec.Cmd, rec.Rev, rec.Ops)
-					case "writeresp":
-						label = fmt.Sprintf("%s %d", rec.Cmd, rec.Rev)
-					}
-					to := fmt.Sprintf("c%d", rec.Conn)
-					dir := "R"
-					start := ""
-					end := ""
-					// labelPos := "[midway, above, font=\\footnotesize]" // right = 2mm and 2mm"
-					labelPos := ""
-					if rec.Conn%2 == 1 {
-						labelPos = "[midway, above right = -2mm and 10mm, font=\\footnotesize, blue]"
-					} else {
-						labelPos = "[midway, above, font=\\footnotesize, blue]"
-					}
-					fmt.Fprintf(outf, "            \\bloodymess[1]{%s}{%s}{%s}{%s}{%s}{%s}{%s}\n",
-						from, label, to, dir, start, end, labelPos)
-				case "RECV":
-					from := fmt.Sprintf("c%d", rec.Conn)
-					label := ""
-					switch rec.Cmd {
-					default:
-						label = fmt.Sprintf("%s %d, %s", rec.Cmd, rec.Rev, rec.Ops)
-					case "open":
-						label = fmt.Sprintf("%s %s", rec.Cmd, rec.Name)
-					case "write":
-						label = fmt.Sprintf("%s %d %s", rec.Cmd, rec.Rev, rec.Ops)
-					}
-					to := "d0"
-					dir := "L"
-					start := ""
-					end := ""
-					// labelPos := "[midway, above, font=\\footnotesize]" // right = 2mm and 2mm"
-					labelPos := ""
-					if rec.Conn%2 == 1 {
-						labelPos = "[midway, above left = -2mm and 10mm, font=\\footnotesize, red]"
-					} else {
-						labelPos = "[midway, above, font=\\footnotesize, red]"
-					}
-					fmt.Fprintf(outf, "            \\bloodymess[1]{%s}{%s}{%s}{%s}{%s}{%s}{%s}\n",
-						from, label, to, dir, start, end, labelPos)
-				}
-
-				prev = rec
+			switch rec.Msg {
+			case "recv":
+				at := "d0"
+				before := fmt.Sprintf("recv %d %s $\\rightarrow$ %s", rec.Rev, rec.Ops, rec.Tops)
+				after := fmt.Sprintf("%d : %s", rec.Docrev, rec.Dochist)
+				fmt.Fprintf(outf, `\begin{callself}{%s}{\footnotesize %s}{\footnotesize %s}
+				\end{callself}`+"\n", at, before, after)
+			case "stat":
+				at := fmt.Sprintf("d0")
+				before := fmt.Sprintf("stat %s", rec.Body)
+				after := fmt.Sprintf("")
+				fmt.Fprintf(outf, `\begin{callself}{%s}{\footnotesize %s}{\footnotesize %s}
+				\end{callself}`+"\n", at, before, after)
 			}
 		}
 	}
@@ -272,3 +241,20 @@ func main() {
 \end{document}`)
 
 }
+
+// from := fmt.Sprintf("c%d", rec.Conn)
+// from := fmt.Sprintf("c%d", rec.Conn)
+// label := fmt.Sprintf("wrt %d %s", rec.Rev, rec.Ops)
+// to := "d0"
+// dir := "L"
+// start := ""
+// end := ""
+// // labelPos := "[midway, above, font=\\footnotesize]" // right = 2mm and 2mm"
+// labelPos := ""
+// if rec.Conn%2 == 1 {
+// 	labelPos = "[midway, above left = -2mm and 10mm, font=\\footnotesize, red]"
+// } else {
+// 	labelPos = "[midway, above, font=\\footnotesize, red]"
+// }
+// fmt.Fprintf(outf, "            \\bloodymess[1]{%s}{%s}{%s}{%s}{%s}{%s}{%s}\n",
+// 	from, label, to, dir, start, end, labelPos)

@@ -6,7 +6,7 @@ package document
 import (
 	im "github.com/mstone/focus/internal/msgs"
 	"github.com/mstone/focus/ot"
-	// "gopkg.in/inconshreveable/log15.v2"
+	"gopkg.in/inconshreveable/log15.v2"
 )
 
 // struct doc represents a vaporpad (like a file)
@@ -72,38 +72,39 @@ func (d *doc) readLoop() {
 				Rev:  len(d.hist),
 			}
 		case im.Write:
-			// log15.Info("recv", "obj", "doc", "rev", v.Rev, "ops", v.Ops, "docrev", len(d.hist), "dochist", d.Body())
 			rev, ops := d.transform(v.Rev, v.Ops.Clone())
+			log15.Info("recv", "obj", "doc", "rev", v.Rev, "ops", v.Ops, "docrev", len(d.hist), "dochist", d.Body(), "nrev", rev, "tops", ops)
 			d.broadcast(v.Conn, rev, ops)
 		}
 	}
 }
 
-func (d *doc) transform(rev int, ops ot.Ops) (int, ot.Ops) {
+func (d *doc) transform(rev int, clientOps ot.Ops) (int, ot.Ops) {
 	// extract concurrent ops
-	concurrentOps := []ot.Ops{}
+	concurrentServerOps := []ot.Ops{}
 	if rev < len(d.hist) {
-		concurrentOps = d.hist[rev:]
+		concurrentServerOps = d.hist[rev:]
 	}
 
 	// compose concurrent ops
-	composedOps := ot.Ops{}
-	for _, concurrentOp := range concurrentOps {
-		composedOps = ot.Compose(composedOps, concurrentOp)
+	serverOps := ot.Ops{}
+	for _, concurrentOp := range concurrentServerOps {
+		serverOps = ot.Compose(serverOps, concurrentOp)
 	}
 
 	// produce transformed ops
-	transformedOps, _ := ot.Transform(ops, composedOps)
+	forServer, _ := ot.Transform(clientOps, serverOps)
 
 	// update history
-	d.hist = append(d.hist, transformedOps)
+	// d.hist = append(d.hist, transformedOps)
+	d.hist = append(d.hist, forServer)
 
 	// update composed ops for new conns
-	d.comp = ot.Compose(d.comp, transformedOps)
+	d.comp = ot.Compose(d.comp, forServer)
 
 	rev = len(d.hist)
 
-	return rev, transformedOps
+	return rev, forServer
 }
 
 func (d *doc) broadcast(conn chan interface{}, rev int, ops ot.Ops) {

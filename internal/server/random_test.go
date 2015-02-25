@@ -4,11 +4,9 @@
 package server
 
 import (
-	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	log "gopkg.in/inconshreveable/log15.v2"
-	"math/big"
 	"sync"
 	"testing"
 	"time"
@@ -23,9 +21,11 @@ import (
 // const numRounds = 3
 // const numChars = 8
 
-const numClients = 10
-const numRounds = 1
-const numChars = 8
+const numClients = 3
+const numRounds = 3
+const numChars = 3
+const readTimeout = 50 * time.Millisecond
+const writeTimeout = 500 * time.Millisecond
 
 type ws struct {
 	rq, wq chan interface{}
@@ -96,11 +96,8 @@ func (w *ws) CancelWriteTimeout() error {
 }
 
 type client struct {
-	mu      sync.Mutex
-	wg      *sync.WaitGroup
 	clname  string
 	name    string
-	fd      int
 	ws      connection.WebSocket
 	rev     int
 	doc     *ot.Doc
@@ -108,58 +105,26 @@ type client struct {
 	numSend int
 	numRecv int
 	l       log.Logger
-}
-
-func randIntn(n int) int {
-	b, _ := rand.Int(rand.Reader, big.NewInt(int64(n)))
-	return int(b.Int64())
+	hist    []msg.Msg
 }
 
 func (c *client) sendRandomOps() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	ops := ot.Ops{}
 	size := c.doc.Len()
-	op := 0
-	if size > 0 {
-		op = randIntn(2)
-	}
-	switch op {
-	case 0: // insert
-		s := fmt.Sprintf("%x", randIntn(numChars))
-		pos := 0
-		if size > 0 {
-			pos = randIntn(size)
-		}
-		ops = ot.NewInsert(size, pos, s)
-	case 1: // delete
-		if size == 1 {
-			ops = ot.NewDelete(1, 0, 1)
-		} else {
-			d := randIntn(size)
-			pos := 0
-			if size-d > 0 {
-				pos = randIntn(size - d)
-			}
-			ops = ot.NewDelete(size, pos, d)
-		}
-	}
+	ops := c.doc.GetRandomOps(numChars)
 
-	c.l.Info("genn", "ops", ops, "docsize", size, "doc", c.doc.String(), "docp", fmt.Sprintf("%p", c.doc))
-	c.doc.Apply(ops.Clone())
+	c.doc.Apply(ops)
 	c.st = c.st.Client(c, ops.Clone())
+	c.l.Info("genn", "ops", ops, "docsize", size, "doc", c.doc.String(), "docp", fmt.Sprintf("%p", c.doc), "clnhist", c.doc.String(), "clnst", c.st)
 }
 
 func (c *client) Send(ops ot.Ops) {
-	c.ws.SetWriteTimeout(1000 * time.Millisecond)
+	c.ws.SetWriteTimeout(writeTimeout)
 	m := msg.Msg{
 		Cmd: msg.C_WRITE,
-		Fd:  c.fd,
 		Rev: c.rev,
 		Ops: ops.Clone(),
 	}
-	c.l.Info("send", "num", c.numSend, "rev", c.rev, "ops", ops)
+	// c.l.Info("send", "num", c.numSend, "rev", c.rev, "ops", ops)
 	err := c.ws.WriteJSON(m)
 	c.ws.CancelWriteTimeout()
 	if err != nil {
@@ -173,45 +138,37 @@ func (c *client) String() string {
 }
 
 func (c *client) Recv(rev int, ops ot.Ops) {
-	// c.l.Info("recv", "num", c.numRecv, "kind", "wrt", "rev", rev, "ops", ops, "clnrev", c.rev, "clnhist", c.doc.String())
 	c.doc.Apply(ops.Clone())
 	c.rev = rev
+	c.l.Info("stat", "body", c.doc.String(), "clnst", c.st)
 }
 
 func (c *client) Ack(rev int) {
-	// c.l.Info("recv", "num", c.numRecv, "kind", "ack", "rev", rev, "clnrev", c.rev, "clnhist", c.doc.String())
+	c.l.Info("recv", "num", c.numRecv, "kind", "ack", "rev", rev, "clnrev", c.rev, "clnhist", c.doc.String(), "clnst", c.st)
 	c.rev = rev
 }
 
 func (c *client) onWriteResp(m msg.Msg) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
 	c.st = c.st.Ack(c, m.Rev)
 }
 
 func (c *client) onWrite(m msg.Msg) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
+	c.l.Info("recv", "num", c.numRecv, "kind", "wrt", "rev", m.Rev, "ops", m.Ops, "clnrev", c.rev, "clnhist", c.doc.String(), "clnst", c.st)
 	c.st = c.st.Server(c, m.Rev, m.Ops.Clone())
 }
 
-func (c *client) writeLoop() {
-	defer c.wg.Done()
-
-	for i := 0; i < numRounds; i++ {
-		c.sendRandomOps()
-	}
-}
-
-func (c *client) readLoop() {
-	defer c.wg.Done()
+func (c *client) loop() {
+	round := 0
 
 Loop:
 	for {
+		if round < numRounds {
+			c.sendRandomOps()
+			round++
+		}
+
 		m := msg.Msg{}
-		c.ws.SetReadTimeout(500 * time.Millisecond)
+		c.ws.SetReadTimeout(readTimeout)
 		err := c.ws.ReadJSON(&m)
 		c.ws.CancelReadTimeout()
 		if err != nil {
@@ -240,90 +197,40 @@ func testOnce(t *testing.T) {
 	clients := make([]*client, numClients)
 
 	run := func(idx int) {
-		var err error
 		defer wg.Done()
 
 		// BUG(mistone): OPEN / really should probably fail, though we'll test that it works today.
 		vpName := "/"
 
-		cwg := &sync.WaitGroup{}
-
 		conn, conn2 := NewWSPair()
 
 		c := &client{
-			mu:     sync.Mutex{},
-			wg:     cwg,
 			clname: fmt.Sprintf("%d", idx),
 			name:   vpName,
 			rev:    0,
 			doc:    ot.NewDoc(),
 			st:     &ot.Synchronized{},
 			ws:     conn,
+			hist:   []msg.Msg{},
 		}
 		c.l = log.New(
 			"obj", "cln",
 			"client", log.Lazy{c.String},
-			"#", log.Lazy{func() int {
-				return c.numRecv + c.numSend
-			}},
 		)
 		clients[idx] = c
 
 		focusSrv.Connect(conn2)
 
-		conn.SetWriteTimeout(1000 * time.Millisecond)
-		err = conn.WriteJSON(msg.Msg{
+		conn.WriteJSON(msg.Msg{
 			Cmd:  msg.C_OPEN,
 			Name: vpName,
 		})
-		conn.CancelWriteTimeout()
-		if err != nil {
-			t.Errorf("unable to write OPEN, err: %q", err)
-		}
 
 		// read open resp
 		m := msg.Msg{}
-		conn.SetReadTimeout(1000 * time.Millisecond)
-		err = conn.ReadJSON(&m)
-		conn.CancelReadTimeout()
-		if err != nil {
-			t.Errorf("server unable to read OPEN_RESP, err: %q", err)
-		}
-		conn.CancelReadTimeout()
+		conn.ReadJSON(&m)
 
-		if m.Cmd != msg.C_OPEN_RESP {
-			t.Errorf("client did not get an OPEN_RESP; msg: %+v", m)
-		}
-
-		if m.Name != vpName {
-			t.Errorf("client got OPEN_RESP with wrong vaporpad: %s vs %+v", vpName, m)
-		}
-		c.name = vpName
-		c.fd = m.Fd
-
-		// read open resp
-		m = msg.Msg{}
-		conn.SetReadTimeout(1000 * time.Millisecond)
-		err = conn.ReadJSON(&m)
-		conn.CancelReadTimeout()
-		if err != nil {
-			t.Errorf("server unable to read first WRITE, err: %q", err)
-		}
-		conn.CancelReadTimeout()
-
-		if m.Cmd != msg.C_WRITE {
-			t.Errorf("client did not get first WRITE; msg: %+v", m)
-		}
-
-		if m.Fd != c.fd {
-			t.Errorf("client got first WRITE with wrong fd: %s vs %+v", c.fd, m)
-		}
-		c.onWrite(m)
-
-		cwg.Add(2)
-		go c.writeLoop()
-		go c.readLoop()
-		cwg.Wait()
+		c.loop()
 	}
 
 	wg.Add(numClients)
@@ -337,22 +244,33 @@ func testOnce(t *testing.T) {
 	d <- im.Readall{sdrc}
 	sdr := <-sdrc
 	sd := sdr.Body
+
+	log.Info("stat", "obj", "doc", "body", sd)
+
+	for i := 0; i < numClients; i++ {
+		st := clients[i].st
+		log.Info("stat", "obj", "cln", "client", i, "body", clients[i].doc.String(), "clnst", st)
+		if !ot.IsSynchronized(st) {
+			t.Fatalf("unsynchronized client[%d]; state: %q", i, st)
+		}
+	}
+
 	for i := 0; i < numClients; i++ {
 		s1 := clients[i].doc.String()
 		if sd != s1 {
-			t.Fatalf("error, doc[%d] != server doc\n\t%q\n\t%q", i, s1, sd)
+			t.Fatalf("error, doc[%d] != server doc\n\t%q\n\t%q\n\tstate: %q", i, s1, sd, clients[i].st)
 		}
 		for j := i + 1; j < numClients; j++ {
 			s2 := clients[j].doc.String()
 			if s1 != s2 {
-				t.Fatalf("error, doc[%d] != doc[%d]\n\t%q\n\t%q", i, j, s1, s2)
+				t.Fatalf("error, doc[%d] != doc[%d]\n\t%q\n\t%q\n\tstate1: %q\n\tstate2: %q", i, j, s1, s2, clients[i].st, clients[j].st)
 			}
 		}
 	}
 }
 
 func TestRandom(t *testing.T) {
-	for i := 0; i < 90; i++ {
+	for i := 0; i < 300; i++ {
 		testOnce(t)
 	}
 }

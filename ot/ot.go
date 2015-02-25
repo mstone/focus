@@ -31,8 +31,10 @@ package ot
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"strings"
 	"sync"
 	"unicode/utf8"
@@ -614,4 +616,40 @@ func (d *Doc) Apply(os Ops) {
 		copy(d.body[idx:idx+len(p)], p)
 		idx += len(p)
 	}
+}
+
+func RandIntn(n int) int {
+	b, _ := rand.Int(rand.Reader, big.NewInt(int64(n)))
+	return int(b.Int64())
+}
+
+func (d *Doc) GetRandomOps(numChars int) Ops {
+	ops := Ops{}
+	size := d.Len()
+	op := 0
+	if size > 0 {
+		op = RandIntn(2)
+	}
+	switch op {
+	case 0: // insert
+		s := fmt.Sprintf("%x", RandIntn(numChars*8))
+		pos := 0
+		if size > 0 {
+			pos = RandIntn(size)
+		}
+		ops = NewInsert(size, pos, s)
+	case 1: // delete
+		if size == 1 {
+			ops = NewDelete(1, 0, 1)
+		} else {
+			d := RandIntn(size)
+			pos := 0
+			if size-d > 0 {
+				pos = RandIntn(size - d)
+			}
+			ops = NewDelete(size, pos, d)
+		}
+	}
+
+	return ops.Clone()
 }

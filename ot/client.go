@@ -44,12 +44,19 @@ type Client interface {
 	Ack(rev int)
 }
 
+func IsSynchronized(st State) bool {
+	switch st.(type) {
+	case *Synchronized:
+		return true
+	default:
+		return false
+	}
+}
+
 type Synchronized struct{}
 
-var synchronized = &Synchronized{}
-
 func (s *Synchronized) String() string {
-	return "Synchronized{}"
+	return "Synchronized"
 }
 
 func (s *Synchronized) Client(c Client, ops Ops) State {
@@ -75,7 +82,7 @@ type Waiting struct {
 }
 
 func (w *Waiting) String() string {
-	return fmt.Sprintf("Waiting{inflight: %s}", w.inflight)
+	return fmt.Sprintf("Waiting %s", w.inflight)
 }
 
 func (w *Waiting) Client(c Client, ops Ops) State {
@@ -95,7 +102,7 @@ func (w *Waiting) Server(c Client, rev int, ops Ops) State {
 
 func (w *Waiting) Ack(c Client, rev int) State {
 	c.Ack(rev)
-	return synchronized
+	return &Synchronized{}
 }
 
 type Buffering struct {
@@ -104,7 +111,7 @@ type Buffering struct {
 }
 
 func (b *Buffering) String() string {
-	return fmt.Sprintf("Buffering{inflight: %s, waiting: %s}", b.inflight, b.waiting)
+	return fmt.Sprintf("Buffering %s %s", b.inflight, b.waiting)
 }
 
 func (b *Buffering) Client(c Client, ops Ops) State {

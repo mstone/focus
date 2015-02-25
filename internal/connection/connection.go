@@ -61,29 +61,6 @@ func (c *conn) allocFd() int {
 	return fd
 }
 
-func (c *conn) onVppOpen(m msg.Msg) {
-	srvrReplyChan := make(chan im.Allocdocresp)
-	c.srvr <- im.Allocdoc{
-		Reply: srvrReplyChan,
-		Name:  m.Name,
-	}
-
-	srvrResp := <-srvrReplyChan
-	if srvrResp.Err != nil {
-		panic("conn unable to Allocdoc")
-	}
-
-	fd := c.allocFd()
-	doc := srvrResp.Doc
-	c.setDoc(fd, doc)
-
-	doc <- im.Open{
-		Conn: c.msgs,
-		Name: m.Name,
-		Fd:   fd,
-	}
-}
-
 func (c *conn) getDoc(fd int) (chan interface{}, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -106,6 +83,29 @@ func (c *conn) setDoc(fd int, doc chan interface{}) {
 
 	c.docs[fd] = doc
 	c.fds[doc] = fd
+}
+
+func (c *conn) onVppOpen(m msg.Msg) {
+	srvrReplyChan := make(chan im.Allocdocresp)
+	c.srvr <- im.Allocdoc{
+		Reply: srvrReplyChan,
+		Name:  m.Name,
+	}
+
+	srvrResp := <-srvrReplyChan
+	if srvrResp.Err != nil {
+		panic("conn unable to Allocdoc")
+	}
+
+	fd := c.allocFd()
+	doc := srvrResp.Doc
+	c.setDoc(fd, doc)
+
+	doc <- im.Open{
+		Conn: c.msgs,
+		Name: m.Name,
+		Fd:   fd,
+	}
 }
 
 func (c *conn) onVppWrite(m msg.Msg) {

@@ -4,10 +4,7 @@
 package ot
 
 import (
-	"crypto/rand"
 	"encoding/json"
-	"fmt"
-	"math/big"
 	"reflect"
 	"testing"
 )
@@ -398,49 +395,13 @@ func TestTransform(t *testing.T) {
 	doTransformTable(t, table)
 }
 
-func randIntn(n int) int {
-	b, _ := rand.Int(rand.Reader, big.NewInt(int64(n)))
-	return int(b.Int64())
-}
-
-func getRandomOps(d *Doc, numChars int) Ops {
-	ops := Ops{}
-	size := d.Len()
-	op := 0
-	if size > 0 {
-		op = randIntn(2)
-	}
-	switch op {
-	case 0: // insert
-		s := fmt.Sprintf("%x", randIntn(numChars*8))
-		pos := 0
-		if size > 0 {
-			pos = randIntn(size)
-		}
-		ops = NewInsert(size, pos, s)
-	case 1: // delete
-		if size == 1 {
-			ops = NewDelete(1, 0, 1)
-		} else {
-			d := randIntn(size)
-			pos := 0
-			if size-d > 0 {
-				pos = randIntn(size - d)
-			}
-			ops = NewDelete(size, pos, d)
-		}
-	}
-
-	return ops.Clone()
-}
-
 func testOneCompose(t *testing.T) {
 	composedOps := Ops{}
 
 	d1 := NewDoc()
 
 	for i := 0; i < 100; i++ {
-		ops := getRandomOps(d1, 4)
+		ops := d1.GetRandomOps(4)
 		d1.Apply(ops)
 		composedOps = Compose(composedOps, ops)
 	}
@@ -469,10 +430,10 @@ func testOneTransform(t *testing.T) {
 	a2 := Ops{}
 
 	for i := 0; i < 100; i++ {
-		o1 := getRandomOps(d1, 4)
+		o1 := d1.GetRandomOps(4)
 		d1.Apply(o1)
 
-		o2 := getRandomOps(d2, 4)
+		o2 := d2.GetRandomOps(4)
 		d2.Apply(o2)
 
 		a1 = Compose(a1, o1)
