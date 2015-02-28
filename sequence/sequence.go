@@ -8,6 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"regexp"
 
 	log "gopkg.in/inconshreveable/log15.v2"
 
@@ -48,6 +49,13 @@ type Record struct {
 	Docrev  int
 	Dochist string
 	Tops    string
+}
+
+var ampersand = regexp.MustCompile("&")
+
+func escape(s string) string {
+	s = ampersand.ReplaceAllLiteralString(s, `\&`)
+	return s
 }
 
 func main() {
@@ -186,13 +194,13 @@ func main() {
 				before := fmt.Sprintf("gen %s : %s : %s", rec.Ops, rec.Clnst, rec.Clnhist)
 				after := fmt.Sprintf("")
 				fmt.Fprintf(outf, `\begin{callself}{%s}{\footnotesize %s}{\footnotesize %s}
-				\end{callself}`+"\n", at, before, after)
+				\end{callself}`+"\n", escape(at), escape(before), escape(after))
 			case "stat":
 				at := fmt.Sprintf("c%d", rec.Client)
 				before := fmt.Sprintf("stat %s : %s", rec.Body, rec.Clnst)
 				after := fmt.Sprintf("")
 				fmt.Fprintf(outf, `\begin{callself}{%s}{\footnotesize %s}{\footnotesize %s}
-				\end{callself}`+"\n", at, before, after)
+				\end{callself}`+"\n", escape(at), escape(before), escape(after))
 			case "recv":
 				from := "d0"
 				var label string
@@ -213,7 +221,7 @@ func main() {
 					labelPos = "[midway, above, font=\\footnotesize, blue]"
 				}
 				fmt.Fprintf(outf, "            \\bloodymess[1]{%s}{%s}{%s}{%s}{%s}{%s}{%s}\n",
-					from, label, to, dir, start, end, labelPos)
+					escape(from), escape(label), escape(to), escape(dir), escape(start), escape(end), escape(labelPos))
 			}
 		}
 		if rec.Obj == "doc" {
@@ -223,13 +231,13 @@ func main() {
 				before := fmt.Sprintf("recv %d %s $\\rightarrow$ %s", rec.Rev, rec.Ops, rec.Tops)
 				after := fmt.Sprintf("%d : %s", rec.Docrev, rec.Dochist)
 				fmt.Fprintf(outf, `\begin{callself}{%s}{\footnotesize %s}{\footnotesize %s}
-				\end{callself}`+"\n", at, before, after)
+				\end{callself}`+"\n", escape(at), escape(before), escape(after))
 			case "stat":
 				at := fmt.Sprintf("d0")
 				before := fmt.Sprintf("stat %s", rec.Body)
 				after := fmt.Sprintf("")
 				fmt.Fprintf(outf, `\begin{callself}{%s}{\footnotesize %s}{\footnotesize %s}
-				\end{callself}`+"\n", at, before, after)
+				\end{callself}`+"\n", escape(at), escape(before), escape(after))
 			}
 		}
 	}

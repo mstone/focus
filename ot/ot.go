@@ -715,6 +715,10 @@ type Controller struct {
 	serverRev int
 }
 
+func (c *Controller) String() string {
+	return fmt.Sprintf("St[%d, %s, %s, %d]", c.state, c.first, c.rest, c.serverRev)
+}
+
 func NewController(sender Sender, receiver Receiver) *Controller {
 	return &Controller{
 		state:     CS_SYNCED,
