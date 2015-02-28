@@ -372,6 +372,14 @@ Fix:
 	return ops
 }
 
+func ComposeAll(all []Ops) Ops {
+	ret := Ops{}
+	for _, os := range all {
+		ret = Compose(ret, os)
+	}
+	return ret
+}
+
 /*
 func Transform(as, bs Ops) (Ops, Ops) {
 	as2 := as.Clone()
@@ -652,4 +660,123 @@ func (d *Doc) GetRandomOps(numChars int) Ops {
 	}
 
 	return ops.Clone()
+}
+
+func I(s string) Op {
+	return Op{Size: 0, Body: AsRunes(s)}
+}
+
+func R(n int) Op {
+	return Op{Size: n, Body: nil}
+}
+
+func D(n int) Op {
+	return Op{Size: -n, Body: nil}
+}
+
+func NewInsert(docLen int, pos int, s string) Ops {
+	if pos < 0 || pos > docLen+1 {
+		panic(fmt.Errorf("bad position; insert is out of range; pos: %d, s: %q", pos, s))
+	}
+
+	return Ops{R(pos), I(s), R(docLen - pos)}
+}
+
+func NewDelete(docLen int, pos int, length int) Ops {
+	if pos < 0 || pos+length > docLen+1 {
+		panic(fmt.Errorf("bad position; delete is out of range: pos: %d, len: %d", pos, length))
+	}
+
+	return Ops{R(pos), D(length), R(docLen - length - pos)}
+}
+
+type State int
+
+const (
+	CS_SYNCED State = iota
+	CS_WAIT_ONE
+	CS_WAIT_MANY
+)
+
+type Sender interface {
+	Send(rev int, ops Ops)
+}
+
+type Receiver interface {
+	Recv(ops Ops)
+}
+
+type Controller struct {
+	state     State
+	conn      Sender
+	client    Receiver
+	first     Ops
+	rest      []Ops
+	serverRev int
+}
+
+func NewController(sender Sender, receiver Receiver) *Controller {
+	return &Controller{
+		state:     CS_SYNCED,
+		conn:      sender,
+		client:    receiver,
+		first:     nil,
+		rest:      nil,
+		serverRev: 0,
+	}
+}
+
+func (c *Controller) OnClientWrite(ops Ops) {
+	switch c.state {
+	case CS_SYNCED:
+		c.first = ops.Clone()
+		c.conn.Send(c.serverRev, c.first)
+		c.state = CS_WAIT_ONE
+	case CS_WAIT_ONE:
+		c.rest = []Ops{ops.Clone()}
+		c.state = CS_WAIT_MANY
+	case CS_WAIT_MANY:
+		c.rest = append(c.rest, ops.Clone())
+	}
+}
+
+func (c *Controller) OnServerAck(rev int) {
+	switch c.state {
+	case CS_SYNCED:
+		panic("bad ack")
+	case CS_WAIT_ONE:
+		c.serverRev = rev
+		c.first = nil
+		c.state = CS_SYNCED
+	case CS_WAIT_MANY:
+		c.serverRev = rev
+		c.first = ComposeAll(c.rest)
+		c.rest = nil
+		c.conn.Send(c.serverRev, c.first)
+		c.state = CS_WAIT_ONE
+	}
+}
+
+func (c *Controller) OnServerWrite(rev int, ops Ops) {
+	switch c.state {
+	case CS_SYNCED:
+		c.serverRev = rev
+		c.client.Recv(ops)
+	case CS_WAIT_ONE:
+		c.serverRev = rev
+		first2, ops2 := Transform(c.first, ops)
+		c.first = first2
+		c.client.Recv(ops2)
+	case CS_WAIT_MANY:
+		c.serverRev = rev
+		first2, ops2 := Transform(c.first, ops)
+		rest2, ops3 := Transform(ComposeAll(c.rest), ops2)
+		c.first = first2
+		c.rest = []Ops{rest2}
+		c.client.Recv(ops3)
+	}
+}
+
+func (c *Controller) IsSynchronized() bool {
+	return c.state == CS_SYNCED
 }

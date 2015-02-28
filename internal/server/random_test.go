@@ -99,9 +99,8 @@ type client struct {
 	clname  string
 	name    string
 	ws      connection.WebSocket
-	rev     int
 	doc     *ot.Doc
-	st      ot.State
+	st      *ot.Controller
 	numSend int
 	numRecv int
 	l       log.Logger
@@ -113,15 +112,19 @@ func (c *client) sendRandomOps() {
 	ops := c.doc.GetRandomOps(numChars)
 
 	c.doc.Apply(ops)
-	c.st = c.st.Client(c, ops.Clone())
+	c.st.OnClientWrite(ops.Clone())
 	c.l.Info("genn", "ops", ops, "docsize", size, "doc", c.doc.String(), "docp", fmt.Sprintf("%p", c.doc), "clnhist", c.doc.String(), "clnst", c.st)
 }
 
-func (c *client) Send(ops ot.Ops) {
+func (c *client) String() string {
+	return fmt.Sprintf("%s", c.clname)
+}
+
+func (c *client) Send(rev int, ops ot.Ops) {
 	c.ws.SetWriteTimeout(writeTimeout)
 	m := msg.Msg{
 		Cmd: msg.C_WRITE,
-		Rev: c.rev,
+		Rev: rev,
 		Ops: ops.Clone(),
 	}
 	// c.l.Info("send", "num", c.numSend, "rev", c.rev, "ops", ops)
@@ -133,28 +136,18 @@ func (c *client) Send(ops ot.Ops) {
 	c.numSend++
 }
 
-func (c *client) String() string {
-	return fmt.Sprintf("%s", c.clname)
-}
-
-func (c *client) Recv(rev int, ops ot.Ops) {
+func (c *client) Recv(ops ot.Ops) {
 	c.doc.Apply(ops.Clone())
-	c.rev = rev
 	c.l.Info("stat", "body", c.doc.String(), "clnst", c.st)
 }
 
-func (c *client) Ack(rev int) {
-	c.l.Info("recv", "num", c.numRecv, "kind", "ack", "rev", rev, "clnrev", c.rev, "clnhist", c.doc.String(), "clnst", c.st)
-	c.rev = rev
-}
-
 func (c *client) onWriteResp(m msg.Msg) {
-	c.st = c.st.Ack(c, m.Rev)
+	c.st.OnServerAck(m.Rev)
 }
 
 func (c *client) onWrite(m msg.Msg) {
-	c.l.Info("recv", "num", c.numRecv, "kind", "wrt", "rev", m.Rev, "ops", m.Ops, "clnrev", c.rev, "clnhist", c.doc.String(), "clnst", c.st)
-	c.st = c.st.Server(c, m.Rev, m.Ops.Clone())
+	c.l.Info("recv", "num", c.numRecv, "kind", "wrt", "rev", m.Rev, "ops", m.Ops, "clnhist", c.doc.String(), "clnst", c.st)
+	c.st.OnServerWrite(m.Rev, m.Ops.Clone())
 }
 
 func (c *client) loop() {
@@ -207,12 +200,11 @@ func testOnce(t *testing.T) {
 		c := &client{
 			clname: fmt.Sprintf("%d", idx),
 			name:   vpName,
-			rev:    0,
 			doc:    ot.NewDoc(),
-			st:     &ot.Synchronized{},
 			ws:     conn,
 			hist:   []msg.Msg{},
 		}
+		c.st = ot.NewController(c, c)
 		c.l = log.New(
 			"obj", "cln",
 			"client", log.Lazy{c.String},
@@ -250,7 +242,7 @@ func testOnce(t *testing.T) {
 	for i := 0; i < numClients; i++ {
 		st := clients[i].st
 		log.Info("stat", "obj", "cln", "client", i, "body", clients[i].doc.String(), "clnst", st)
-		if !ot.IsSynchronized(st) {
+		if !st.IsSynchronized() {
 			t.Fatalf("unsynchronized client[%d]; state: %q", i, st)
 		}
 	}

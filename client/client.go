@@ -19,7 +19,7 @@ func main() {
 	var aceDiv js.Object
 	var aceObj js.Object
 	var adapter ace.Adapter
-	var state ot.State
+	var state *ot.Controller
 	var conn js.Object
 	var doc js.Object
 	var editor js.Object
@@ -52,7 +52,7 @@ func main() {
 	conn.Set("onclose", func(e js.Object) {
 	})
 	conn.Set("onopen", func(e js.Object) {
-		state = &ot.Synchronized{}
+		state = ot.NewController(&adapter, &adapter)
 		jsOps, _ := json.Marshal(msg.Msg{
 			Cmd:  msg.C_OPEN,
 			Name: vaporpadName.String(),
@@ -75,11 +75,11 @@ func main() {
 		case msg.C_OPEN_RESP:
 			adapter.AttachFd(m.Fd)
 		case msg.C_WRITE_RESP:
-			state = state.Ack(&adapter, m.Rev)
+			state.OnServerAck(m.Rev)
 		case msg.C_WRITE:
-			state = state.Server(&adapter, m.Rev, m.Ops)
+			state.OnServerWrite(m.Rev, m.Ops)
 		}
 	})
 
-	adapter.AttachSocket(&state, conn)
+	adapter.AttachSocket(state, conn)
 }

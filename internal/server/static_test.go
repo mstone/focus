@@ -11,31 +11,24 @@ type cl struct {
 	t        *testing.T
 	wsa, wsb *ws
 	doc      *ot.Doc
-	st       ot.State
-	rev      int
+	st       *ot.Controller
 	num      int
 }
 
-func (c *cl) Send(ops ot.Ops) {
-	c.t.Logf("S: %d, rev: %d, ops: %s", c.num, c.rev, ops)
+func (c *cl) Send(rev int, ops ot.Ops) {
+	c.t.Logf("S: %d, rev: %d, ops: %s", c.num, rev, ops)
 	m := msg.Msg{
 		Cmd: msg.C_WRITE,
 		Fd:  0,
-		Rev: c.rev,
+		Rev: rev,
 		Ops: ops,
 	}
 	c.wsa.WriteJSON(m)
 }
 
-func (c *cl) Recv(rev int, ops ot.Ops) {
+func (c *cl) Recv(ops ot.Ops) {
 	// c.t.Logf("W: %d, rev: %d, ops: %s, prev: %s", c.num, rev, ops, c.doc.String())
 	c.doc.Apply(ops)
-	c.rev = rev
-}
-
-func (c *cl) Ack(rev int) {
-	// c.t.Logf("A: %d, rev: %d", c.num, rev)
-	c.rev = rev
 }
 
 func TestStatic(t *testing.T) {
@@ -46,7 +39,7 @@ func TestStatic(t *testing.T) {
 	for i := 0; i < 4; i++ {
 		cls[i].t = t
 		cls[i].num = i
-		cls[i].st = &ot.Synchronized{}
+		cls[i].st = ot.NewController(&cls[i], &cls[i])
 		cls[i].doc = ot.NewDoc()
 		cls[i].wsa, cls[i].wsb = NewWSPair()
 
@@ -64,16 +57,16 @@ func TestStatic(t *testing.T) {
 
 	send := func(i int, ops ot.Ops) {
 		cls[i].doc.Apply(ops)
-		cls[i].st = cls[i].st.Client(&cls[i], ops)
+		cls[i].st.OnClientWrite(ops)
 	}
 	recv := func(i int) {
 		m := msg.Msg{}
 		cls[i].wsa.ReadJSON(&m)
 		switch m.Cmd {
 		case msg.C_WRITE_RESP:
-			cls[i].st = cls[i].st.Ack(&cls[i], m.Rev)
+			cls[i].st.OnServerAck(m.Rev)
 		case msg.C_WRITE:
-			cls[i].st = cls[i].st.Server(&cls[i], m.Rev, m.Ops)
+			cls[i].st.OnServerWrite(m.Rev, m.Ops)
 		}
 	}
 	recvFlight := func() {

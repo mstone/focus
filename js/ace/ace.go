@@ -110,10 +110,9 @@ type Adapter struct {
 	conn     js.Object
 	session  js.Object
 	doc      js.Object
-	state    *ot.State
+	state    *ot.Controller
 	suppress bool
 	fd       int
-	rev      int
 }
 
 func NewAdapter() *Adapter {
@@ -128,12 +127,12 @@ func (a *Adapter) IsSuppressed() bool {
 	return a.suppress
 }
 
-func (a *Adapter) Send(ops ot.Ops) {
+func (a *Adapter) Send(rev int, ops ot.Ops) {
 	if !a.suppress {
 		jsOps, _ := json.Marshal(msg.Msg{
 			Cmd: msg.C_WRITE,
 			Fd:  a.fd,
-			Rev: a.rev,
+			Rev: rev,
 			Ops: ops,
 		})
 		alert.Golang(fmt.Sprintf("sending jsops: %s", jsOps))
@@ -141,11 +140,7 @@ func (a *Adapter) Send(ops ot.Ops) {
 	}
 }
 
-func (a *Adapter) Ack(rev int) {
-	a.rev = rev
-}
-
-func (a *Adapter) Recv(rev int, ops ot.Ops) {
+func (a *Adapter) Recv(ops ot.Ops) {
 	pos := 0
 	alert.String(fmt.Sprintf("recv(%s)", ops.String()))
 
@@ -175,8 +170,6 @@ func (a *Adapter) Recv(rev int, ops ot.Ops) {
 			a.doc.Call("remove", startEnd)
 		}
 	}
-
-	a.rev = rev
 }
 
 func (a *Adapter) AttachFd(fd int) {
@@ -189,7 +182,7 @@ func (a *Adapter) AttachEditor(session js.Object, doc js.Object) {
 	doc.Call("on", "change", a.OnChange)
 }
 
-func (a *Adapter) AttachSocket(state *ot.State, conn js.Object) {
+func (a *Adapter) AttachSocket(state *ot.Controller, conn js.Object) {
 	a.state = state
 	a.conn = conn
 }
@@ -249,6 +242,6 @@ func (a *Adapter) OnChange(change js.Object) bool {
 	alert.String("sending ops")
 	alert.Golang(ops)
 
-	*a.state = (*a.state).Client(a, ops)
+	(*a.state).OnClientWrite(ops)
 	return true
 }
