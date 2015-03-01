@@ -320,10 +320,16 @@ func TestTransform(t *testing.T) {
 		// xy     x5y
 		// xby    x5by
 		TransformCase{
-			A: Ops{Op{1, nil}, Op{0, AsRunes("5")}, Op{1, nil}},
-			B: Ops{Op{1, nil}, Op{0, AsRunes("b")}, Op{1, nil}},
-			C: Ops{Op{1, nil}, Op{0, AsRunes("5")}, Op{2, nil}},
-			D: Ops{Op{2, nil}, Op{0, AsRunes("b")}, Op{1, nil}},
+			A: Ops{R(1), I("5"), R(1)},
+			B: Ops{R(1), I("b"), R(1)},
+			C: Ops{R(1), I("5"), R(2)},
+			D: Ops{R(2), I("b"), R(1)},
+		},
+		TransformCase{
+			A: Ops{Z(), D(1), Z()},
+			B: Ops{Z(), I("1b"), R(1)},
+			C: Ops{R(2), D(1)},
+			D: Ops{I("1b")},
 		},
 	}
 	doTransformTable(t, table)
@@ -360,9 +366,6 @@ func testOneTransform(t *testing.T) {
 	d1 := NewDoc()
 	d2 := NewDoc()
 
-	a1 := Ops{}
-	a2 := Ops{}
-
 	for i := 0; i < 100; i++ {
 		o1 := d1.GetRandomOps(4)
 		d1.Apply(o1)
@@ -370,14 +373,10 @@ func testOneTransform(t *testing.T) {
 		o2 := d2.GetRandomOps(4)
 		d2.Apply(o2)
 
-		a1 = Compose(a1, o1)
-		a2 = Compose(a2, o2)
+		t1, t2 := Transform(o1, o2)
+		d1.Apply(t2)
+		d2.Apply(t1)
 	}
-
-	b1, b2 := Transform(a1, a2)
-
-	d1.Apply(b2)
-	d2.Apply(b1)
 
 	s1 := d1.String()
 	s2 := d2.String()

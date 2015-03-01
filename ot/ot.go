@@ -433,6 +433,10 @@ func transform1(as, bs Ops) (Ops, Ops) {
 	switch {
 	case a == la && b == lb:
 		break
+	case la > 0 && as.First().IsZero():
+		sa, sb = transform1(as[a+1:], bs)
+	case lb > 0 && bs.First().IsZero():
+		sa, sb = transform1(as, bs[b+1:])
 	case la > 0 && as.First().IsInsert():
 		oa := as.First()
 		ra.Insert(oa.Body)
@@ -630,6 +634,10 @@ func R(n int) Op {
 
 func D(n int) Op {
 	return Op{Size: -n, Body: nil}
+}
+
+func Z() Op {
+	return Op{}
 }
 
 func NewInsert(docLen int, pos int, s string) Ops {
