@@ -558,15 +558,35 @@ Fix:
 }
 
 func Normalize(os Ops) Ops {
-	os3 := os.Clone()
-	os = os3
-	os2 := Ops{}
-	for _, o := range os {
-		if o.Len() != 0 {
-			os2 = append(os2, o)
+	swap := func(a, b *Op) {
+		*a, *b = *b, *a
+	}
+
+	ret := os.Clone()
+
+	for i := 0; i < len(ret)-1; i++ {
+		if ret[i].IsDelete() && ret[i+1].IsInsert() {
+			swap(&ret[i], &ret[i+1])
 		}
 	}
-	return os2
+
+	ret2 := Ops{}
+	for _, o := range ret {
+		switch {
+		case o.IsZero():
+			continue
+		case o.IsInsert():
+			ret2.Insert(o.Body)
+		case o.IsDelete():
+			ret2.Delete(o.Size)
+		case o.IsRetain():
+			ret2.Retain(o.Size)
+		default:
+			panic("unreachable")
+		}
+	}
+
+	return ret2
 }
 
 type Doc struct {
