@@ -5,6 +5,7 @@ package ot
 
 import (
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"testing"
 )
@@ -32,11 +33,16 @@ func TestJSON(t *testing.T) {
 
 type Applier interface {
 	Apply(r *Doc) Ops
+	String() string
 }
 
 type Ins struct {
 	Pos int
 	Str string
+}
+
+func (i Ins) String() string {
+	return fmt.Sprintf("In(%d, %s)", i.Pos, i.Str)
 }
 
 func (i Ins) Apply(r *Doc) Ops {
@@ -48,6 +54,10 @@ func (i Ins) Apply(r *Doc) Ops {
 type Del struct {
 	Pos int
 	Len int
+}
+
+func (d Del) String() string {
+	return fmt.Sprintf("De(%d, %d)", d.Pos, d.Len)
 }
 
 func (d Del) Apply(r *Doc) Ops {
@@ -92,12 +102,14 @@ func doEpoch(t *testing.T, r1, r2 *Doc, trace [2][]A) {
 func doTable(t *testing.T, table []TestCase) {
 	for idx, test := range table {
 		t.Logf("running test case %d", idx)
+		fmt.Printf("\n\nrunning test case %d: %+v\n", idx, test)
 		r1 := NewDoc()
 		r2 := NewDoc()
 
 		doEpoch(t, r1, r2, test.First)
 		doEpoch(t, r1, r2, test.Then)
 		doEpoch(t, r1, r2, test.Rest)
+		fmt.Printf("done running test case %d\n", idx)
 	}
 }
 

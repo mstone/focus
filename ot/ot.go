@@ -80,8 +80,8 @@ func (o *Op) IsInsert() bool {
 	if o == nil {
 		return false
 	}
-	return o.Size == 0
-	// return o.Size == 0 && len(o.Body) > 0
+	// return o.Size == 0
+	return o.Size == 0 && len(o.Body) > 0
 }
 
 func (o *Op) IsZero() bool {
@@ -336,11 +336,13 @@ func addDeleteOp(d Op, os Ops) Ops {
 }
 
 func Compose(as, bs Ops) Ops {
-	return Normalize(compose1(as, bs))
+	ret := Normalize(compose1(as, bs))
+	fmt.Printf("%s\n", ret)
+	return ret
 }
 
 func compose1(as, bs Ops) Ops {
-	// fmt.Printf("compose: %s, %s -> ", as, bs)
+	fmt.Printf("compose: %s, %s -> ", as, bs)
 	ret := Ops{}
 	a := 0
 	b := 0
@@ -350,17 +352,21 @@ func compose1(as, bs Ops) Ops {
 	switch {
 	case a == la && b == lb:
 		break
+	case a == la:
+		ret = bs.Clone()
+	case b == lb:
+		ret = as.Clone()
 	case la > 0 && as[a].IsZero():
-		ret = Compose(as[a+1:], bs)
+		ret = compose1(as[a+1:], bs)
 	case lb > 0 && bs[b].IsZero():
-		ret = Compose(as, bs[b+1:])
+		ret = compose1(as, bs[b+1:])
 	case la > 0 && as[a].IsDelete():
 		// run insertions, then delete, then apply remaining effects
-		rest := Compose(as[a+1:], bs)
+		rest := compose1(as[a+1:], bs)
 		ret = addDeleteOp(as[a].Clone(), rest)
 	case lb > 0 && bs[b].IsInsert():
 		// as[a] is insert, retain, or empty so insert then apply remaining effects
-		rest := Compose(as, bs[b+1:])
+		rest := compose1(as, bs[b+1:])
 		ret = append(ret, bs[b].Clone())
 		ret = append(ret, rest...)
 	case la > 0 && lb > 0:
@@ -389,82 +395,11 @@ func compose1(as, bs Ops) Ops {
 		case oa.IsInsert() && ob.IsDelete():
 			// insertion then deletion cancels
 		}
-		ret = append(ret, Compose(has, hbs)...)
+		ret = append(ret, compose1(has, hbs)...)
 	}
-	// fmt.Printf("%s\n", ret)
+	fmt.Printf("%s\n", ret)
 	return ret
 }
-
-/*
-func Compose(as, bs Ops) Ops {
-	as2 := as.Clone()
-	bs2 := bs.Clone()
-	as = as2
-	bs = bs2
-
-	ops := Ops{}
-
-	if len(as) == 0 {
-		ops := make(Ops, len(bs))
-		copy(ops, bs)
-		return ops
-	}
-
-Fix:
-	for {
-		switch {
-		case len(as) == 0 && len(bs) == 0:
-			break Fix
-		case len(as) > 0 && as.First().IsDelete():
-			ops.Delete(as.First().Size)
-			as = as.Rest()
-			continue
-		case len(bs) > 0 && bs.First().IsInsert():
-			ops.Insert(bs.First().Body)
-			bs = bs.Rest()
-			continue
-		case len(as) > 0 && len(bs) > 0:
-			a := as.First()
-			b := bs.First()
-			minlen := min(a.Len(), b.Len())
-			switch {
-			case a.IsRetain() && b.IsRetain():
-				ops.Retain(minlen)
-			case a.IsRetain() && b.IsDelete():
-				ops.Delete(minlen)
-			case a.IsInsert() && b.IsRetain():
-				ops.Insert(a.Body[:minlen])
-			case a.IsInsert() && b.IsDelete():
-				//ops.Delete(minlen)
-			}
-			a, b = shortenOps(a, b)
-			if a == nil {
-				as = as.Rest()
-			} else {
-				as = append(Ops{*a}, as.Rest()...)
-			}
-			if b == nil {
-				bs = bs.Rest()
-			} else {
-				bs = append(Ops{*b}, bs.Rest()...)
-			}
-			continue
-		case len(as) > 0 && len(bs) == 0:
-			ops = append(ops, as...)
-			as = nil
-			continue
-		case len(as) == 0 && len(bs) > 0:
-			ops = append(ops, bs...)
-			bs = nil
-			continue
-		default:
-			panic("impossible")
-		}
-	}
-
-	// return ops
-	return Normalize(ops)
-}*/
 
 func ComposeAll(all []Ops) Ops {
 	ret := Ops{}
@@ -474,168 +409,77 @@ func ComposeAll(all []Ops) Ops {
 	return ret
 }
 
-/*
 func Transform(as, bs Ops) (Ops, Ops) {
-	as2 := as.Clone()
-	bs2 := bs.Clone()
-	as = as2
-	bs = bs2
-
-	var ai, bi int
-	var al, bl int
-	var aos, bos Ops
-	var a, b *Op
-
-	al = len(as)
-	bl = len(bs)
-
-	if ai < al {
-		a = &as[ai]
-	}
-	if bi < bl {
-		b = &bs[bi]
-	}
-
-	if al == 0 {
-		return nil, bs.Clone()
-	}
-	if bl == 0 {
-		return as.Clone(), nil
-	}
-
-	var loopCount = -1
-
-	// fmt.Printf("xform: as: %s, bs: %s, a: %s, b: %s, ai: %d, bi: %d\n", as, bs, a, b, ai, bi)
-	for {
-		loopCount++
-		// fmt.Printf("loop: %d, a: %s, b: %s, ai: %d, bi: %d\n", loopCount, a, b, ai, bi)
-
-		if a == nil && b == nil {
-			break
-		}
-
-		if a.IsInsert() {
-			aos.Insert(a.Body)
-			bos.Retain(a.Len())
-			ai++
-			if ai < al {
-				a = &as[ai]
-			} else {
-				a = nil
-			}
-			continue
-		}
-		if b.IsInsert() {
-			aos.Retain(b.Len())
-			bos.Insert(b.Body)
-			bi++
-			if bi < bl {
-				b = &bs[bi]
-			} else {
-				b = nil
-			}
-			continue
-		}
-		if a == nil {
-			panic("boom1")
-		}
-		if b == nil {
-			panic("boom2")
-		}
-
-		minlen := min(a.Len(), b.Len())
-		switch {
-		case a.IsRetain() && b.IsRetain():
-			aos.Retain(minlen)
-			bos.Retain(minlen)
-		case a.IsDelete() && b.IsRetain():
-			aos.Delete(minlen)
-		case a.IsRetain() && b.IsDelete():
-			bos.Delete(minlen)
-		}
-		// a2, b2 := a, b
-		a, b = shortenOps(a, b)
-		// fmt.Printf("shorten:\n\ta : %s\n\tb : %s\n\ta2: %s\n\tb2: %s\n", a2, b2, a, b)
-		if a == nil {
-			ai++
-			if ai < al {
-				a = &as[ai]
-			} else {
-				a = nil
-			}
-		}
-		if b == nil {
-			bi++
-			if bi < bl {
-				b = &bs[bi]
-			} else {
-				b = nil
-			}
-		}
-	}
-
-	return aos, bos
+	r1, r2 := transform1(as, bs)
+	r1 = Normalize(r1)
+	r2 = Normalize(r2)
+	fmt.Printf("\n-> %s, %s\n", r1, r2)
+	return r1, r2
 }
-*/
 
-func Transform(as, bs Ops) (Ops, Ops) {
-	var a, b *Op
-	var aos, bos Ops
+func transform1(as, bs Ops) (Ops, Ops) {
+	fmt.Printf("xform: %s, %s -> ", as, bs)
+	a := 0
+	b := 0
 
-Fix:
-	for {
-		switch {
-		case len(as) == 0 && len(bs) == 0:
-			break Fix
-		case len(as) > 0 && as.First().IsInsert():
-			a = as.First()
-			aos.Insert(a.Body)
-			bos.Retain(a.Len())
-			as = as.Rest()
-			continue
-		case len(bs) > 0 && bs.First().IsInsert():
-			b = bs.First()
-			aos.Retain(b.Len())
-			bos.Insert(b.Body)
-			bs = bs.Rest()
-			continue
-		case len(as) > 0 && len(bs) > 0:
-			a = as.First()
-			b = bs.First()
-			minlen := min(a.Len(), b.Len())
-			switch {
-			case a.IsRetain() && b.IsRetain():
-				aos.Retain(minlen)
-				bos.Retain(minlen)
-			case a.IsDelete() && b.IsRetain():
-				aos.Delete(minlen)
-			case a.IsRetain() && b.IsDelete():
-				bos.Delete(minlen)
-			}
-			a, b = shortenOps2(a, b)
-			if a == nil {
-				as = as.Rest()
-			} else {
-				as = append(Ops{*a}, as.Rest()...)
-			}
-			if b == nil {
-				bs = bs.Rest()
-			} else {
-				bs = append(Ops{*b}, bs.Rest()...)
-			}
-			continue
-		case len(as) > 0 && len(bs) == 0:
-			aos = append(aos, as...)
-			return aos, bos
-		case len(as) == 0 && len(bs) > 0:
-			bos = append(bos, bs...)
-			return aos, bos
-		default:
-			panic("oops!")
+	ra := Ops{}
+	rb := Ops{}
+	sa := Ops{}
+	sb := Ops{}
+
+	la := len(as)
+	lb := len(bs)
+
+	switch {
+	case a == la && b == lb:
+		break
+	case la > 0 && as.First().IsInsert():
+		oa := as.First()
+		ra.Insert(oa.Body)
+		rb.Retain(oa.Len())
+		sa, sb = transform1(as[a+1:], bs)
+	case lb > 0 && bs.First().IsInsert():
+		ob := bs.First()
+		ra.Retain(ob.Len())
+		rb.Insert(ob.Body)
+		sa, sb = transform1(as, bs[b+1:])
+	case la > 0 && lb > 0:
+		oa := as.First()
+		ob := bs.First()
+		minlen := min(oa.Len(), ob.Len())
+		ta, tb := shortenOps(*oa, *ob)
+
+		has := Ops{}
+		if !ta.IsZero() {
+			has = append(has, ta)
 		}
+		has = append(has, as[a+1:]...)
+
+		hbs := Ops{}
+		if !tb.IsZero() {
+			hbs = append(hbs, tb)
+		}
+		hbs = append(hbs, bs[b+1:]...)
+
+		switch {
+		case oa.IsRetain() && ob.IsRetain():
+			ra.Retain(minlen)
+			rb.Retain(minlen)
+		case oa.IsDelete() && ob.IsDelete():
+		case oa.IsDelete() && ob.IsRetain():
+			ra.Delete(minlen)
+		case oa.IsRetain() && ob.IsDelete():
+			rb.Delete(minlen)
+		}
+		sa, sb = transform1(has, hbs)
+	default:
+		panic("unreachable")
 	}
 
-	return aos, bos
+	ret1 := append(ra, sa...)
+	ret2 := append(rb, sb...)
+	fmt.Printf("%s, %s -> ", ret1, ret2)
+	return ret1, ret2
 }
 
 func Normalize(os Ops) Ops {

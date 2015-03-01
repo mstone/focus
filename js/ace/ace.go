@@ -127,13 +127,14 @@ func (a *Adapter) IsSuppressed() bool {
 	return a.suppress
 }
 
-func (a *Adapter) Send(rev int, ops ot.Ops) {
+func (a *Adapter) Send(rev int, hash string, ops ot.Ops) {
 	if !a.suppress {
 		jsOps, _ := json.Marshal(msg.Msg{
-			Cmd: msg.C_WRITE,
-			Fd:  a.fd,
-			Rev: rev,
-			Ops: ops,
+			Cmd:  msg.C_WRITE,
+			Fd:   a.fd,
+			Rev:  rev,
+			Hash: hash,
+			Ops:  ops,
 		})
 		alert.Golang(fmt.Sprintf("sending jsops: %s", jsOps))
 		a.conn.Call("send", jsOps)
