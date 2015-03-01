@@ -279,43 +279,123 @@ func min(a, b int) int {
 	}
 }
 
-func (o Op) Shorten(nl int) Op {
+func shorten(o Op, nl int) Op {
 	switch {
 	case o.IsRetain():
 		o.Size -= nl
 	case o.IsDelete():
 		o.Size += nl
 	case o.IsInsert():
-		// BUG(mistone): mutation?
-		// o.Body = o.Body[nl:]
-		body := make([]rune, len(o.Body)-nl)
-		copy(body, o.Body[nl:])
-		o.Body = body
+		o.Body = o.Body[nl:]
 	}
 	return o
 }
 
-func shortenOps(a *Op, b *Op) (*Op, *Op) {
-	a3 := a.Clone()
-	b3 := b.Clone()
-	a = &a3
-	b = &b3
+func shortenOps(a Op, b Op) (Op, Op) {
+	la := a.Len()
+	lb := b.Len()
+	switch {
+	case la == lb:
+		return R(0), R(0)
+	case la > lb:
+		return shorten(a, lb), R(0)
+	case la <= lb:
+		return R(0), shorten(b, la)
+	}
+	panic("unreachable")
+}
 
+func shortenOps2(a *Op, b *Op) (*Op, *Op) {
 	la := a.Len()
 	lb := b.Len()
 	switch {
 	case la == lb:
 		return nil, nil
 	case a != nil && b != nil && la > lb:
-		a2 := a.Shorten(lb)
+		a2 := shorten(*a, lb)
 		return &a2, nil
 	case a != nil && b != nil && la <= lb:
-		b2 := b.Shorten(la)
+		b2 := shorten(*b, la)
 		return nil, &b2
 	}
 	return a, b
 }
 
+func addDeleteOp(d Op, os Ops) Ops {
+	if len(os) > 0 && os.First().IsInsert() {
+		ret := Ops{}
+		ret = append(ret, os.First().Clone())
+		ret = append(ret, addDeleteOp(d, os.Rest())...)
+		return ret
+	} else {
+		ret := Ops{}
+		ret = append(ret, d)
+		ret = append(ret, os...)
+		return ret
+	}
+}
+
+func Compose(as, bs Ops) Ops {
+	return Normalize(compose1(as, bs))
+}
+
+func compose1(as, bs Ops) Ops {
+	// fmt.Printf("compose: %s, %s -> ", as, bs)
+	ret := Ops{}
+	a := 0
+	b := 0
+	la := len(as)
+	lb := len(bs)
+
+	switch {
+	case a == la && b == lb:
+		break
+	case la > 0 && as[a].IsZero():
+		ret = Compose(as[a+1:], bs)
+	case lb > 0 && bs[b].IsZero():
+		ret = Compose(as, bs[b+1:])
+	case la > 0 && as[a].IsDelete():
+		// run insertions, then delete, then apply remaining effects
+		rest := Compose(as[a+1:], bs)
+		ret = addDeleteOp(as[a].Clone(), rest)
+	case lb > 0 && bs[b].IsInsert():
+		// as[a] is insert, retain, or empty so insert then apply remaining effects
+		rest := Compose(as, bs[b+1:])
+		ret = append(ret, bs[b].Clone())
+		ret = append(ret, rest...)
+	case la > 0 && lb > 0:
+		// do as much as we can, then recurse in a new hypothetical world
+		oa := as[a]
+		ob := bs[b]
+
+		sa, sb := shortenOps(oa, ob)
+
+		has := Ops{}
+		has = append(has, sa)
+		has = append(has, as[a+1:]...)
+
+		hbs := Ops{}
+		hbs = append(hbs, sb)
+		hbs = append(hbs, bs[b+1:]...)
+
+		minlen := min(oa.Len(), ob.Len())
+		switch {
+		case oa.IsRetain() && ob.IsRetain():
+			ret = append(ret, R(minlen))
+		case oa.IsRetain() && ob.IsDelete():
+			ret = append(ret, D(minlen))
+		case oa.IsInsert() && ob.IsRetain():
+			ret = append(ret, Op{Body: oa.Body[:minlen]})
+		case oa.IsInsert() && ob.IsDelete():
+			// insertion then deletion cancels
+		}
+		ret = append(ret, Compose(has, hbs)...)
+	}
+	// fmt.Printf("%s\n", ret)
+	return ret
+}
+
+/*
 func Compose(as, bs Ops) Ops {
 	as2 := as.Clone()
 	bs2 := bs.Clone()
@@ -382,8 +462,9 @@ Fix:
 		}
 	}
 
-	return ops
-}
+	// return ops
+	return Normalize(ops)
+}*/
 
 func ComposeAll(all []Ops) Ops {
 	ret := Ops{}
@@ -531,7 +612,7 @@ Fix:
 			case a.IsRetain() && b.IsDelete():
 				bos.Delete(minlen)
 			}
-			a, b = shortenOps(a, b)
+			a, b = shortenOps2(a, b)
 			if a == nil {
 				as = as.Rest()
 			} else {
