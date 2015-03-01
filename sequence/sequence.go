@@ -49,6 +49,7 @@ type Record struct {
 	Docrev  int
 	Dochist string
 	Tops    string
+	Hash    string
 }
 
 var ampersand = regexp.MustCompile("&")
@@ -179,6 +180,11 @@ func main() {
 	scanner := bufio.NewScanner(inf)
 	var rec Record
 
+	arr := func(from string, label string, to string, dir string, start string, end string, labelPos string) {
+		fmt.Fprintf(outf, "            \\bloodymess[1]{%s}{%s}{%s}{%s}{%s}{%s}{%s}\n",
+			escape(from), escape(label), escape(to), escape(dir), escape(start), escape(end), escape(labelPos))
+	}
+
 	for scanner.Scan() {
 		line := scanner.Text()
 		rec = Record{}
@@ -205,10 +211,14 @@ func main() {
 				from := "d0"
 				var label string
 				switch rec.Kind {
-				case "wrt":
+				case "wrt1":
+					continue
+				case "wrt2":
 					label = fmt.Sprintf("wrt %d %s : %s : %s", rec.Rev, rec.Ops, rec.Clnst, rec.Clnhist)
-				case "ack":
-					label = fmt.Sprintf("ack %d", rec.Rev)
+				case "ack1":
+					continue
+				case "ack2":
+					label = fmt.Sprintf("ack %d %s: %s : %s", rec.Rev, rec.Ops, rec.Clnst, rec.Clnhist)
 				}
 				to := fmt.Sprintf("c%d", rec.Client)
 				dir := "R"
@@ -220,15 +230,14 @@ func main() {
 				} else {
 					labelPos = "[midway, above, font=\\footnotesize, blue]"
 				}
-				fmt.Fprintf(outf, "            \\bloodymess[1]{%s}{%s}{%s}{%s}{%s}{%s}{%s}\n",
-					escape(from), escape(label), escape(to), escape(dir), escape(start), escape(end), escape(labelPos))
+				arr(from, label, to, dir, start, end, labelPos)
 			}
 		}
 		if rec.Obj == "doc" {
 			switch rec.Msg {
 			case "recv":
 				at := "d0"
-				before := fmt.Sprintf("recv %d %s $\\rightarrow$ %s", rec.Rev, rec.Ops, rec.Tops)
+				before := fmt.Sprintf("recv %d : %s : %s $\\rightarrow$ %s", rec.Rev, rec.Hash, rec.Ops, rec.Tops)
 				after := fmt.Sprintf("%d : %s", rec.Docrev, rec.Dochist)
 				fmt.Fprintf(outf, `\begin{callself}{%s}{\footnotesize %s}{\footnotesize %s}
 				\end{callself}`+"\n", escape(at), escape(before), escape(after))

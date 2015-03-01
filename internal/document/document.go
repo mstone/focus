@@ -73,7 +73,7 @@ func (d *doc) readLoop() {
 			}
 		case im.Write:
 			rev, ops := d.transform(v.Rev, v.Ops.Clone())
-			log15.Info("recv", "obj", "doc", "rev", v.Rev, "ops", v.Ops, "docrev", len(d.hist), "dochist", d.Body(), "nrev", rev, "tops", ops)
+			log15.Info("recv", "obj", "doc", "rev", v.Rev, "hash", v.Hash, "ops", v.Ops, "docrev", len(d.hist), "dochist", d.Body(), "nrev", rev, "tops", ops)
 			d.broadcast(v.Conn, rev, ops)
 		}
 	}
@@ -113,6 +113,7 @@ func (d *doc) broadcast(conn chan interface{}, rev int, ops ot.Ops) {
 			m := im.Writeresp{
 				Doc: d.msgs,
 				Rev: rev,
+				Ops: ops.Clone(),
 			}
 			pconn <- m
 		} else {

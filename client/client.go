@@ -75,7 +75,7 @@ func main() {
 		case msg.C_OPEN_RESP:
 			adapter.AttachFd(m.Fd)
 		case msg.C_WRITE_RESP:
-			state.OnServerAck(m.Rev)
+			state.OnServerAck(m.Rev, m.Ops)
 		case msg.C_WRITE:
 			state.OnServerWrite(m.Rev, m.Ops)
 		}

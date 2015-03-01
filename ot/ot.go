@@ -699,7 +699,7 @@ const (
 )
 
 type Sender interface {
-	Send(rev int, ops Ops)
+	Send(rev int, hash string, ops Ops)
 }
 
 type Receiver interface {
@@ -713,10 +713,11 @@ type Controller struct {
 	first     Ops
 	rest      []Ops
 	serverRev int
+	serverDoc *Doc
 }
 
 func (c *Controller) String() string {
-	return fmt.Sprintf("St[%d, %s, %s, %d]", c.state, c.first, c.rest, c.serverRev)
+	return fmt.Sprintf("St[%d, %s, %s, %d, %s]", c.state, c.first, c.rest, c.serverRev, c.serverDoc.String())
 }
 
 func NewController(sender Sender, receiver Receiver) *Controller {
@@ -727,41 +728,46 @@ func NewController(sender Sender, receiver Receiver) *Controller {
 		first:     nil,
 		rest:      nil,
 		serverRev: 0,
+		serverDoc: NewDoc(),
 	}
 }
 
 func (c *Controller) OnClientWrite(ops Ops) {
+	ops = Normalize(ops.Clone())
 	switch c.state {
 	case CS_SYNCED:
-		c.first = ops.Clone()
-		c.conn.Send(c.serverRev, c.first)
+		c.first = ops
+		c.conn.Send(c.serverRev, c.serverDoc.String(), ops)
 		c.state = CS_WAIT_ONE
 	case CS_WAIT_ONE:
-		c.rest = []Ops{ops.Clone()}
+		c.rest = []Ops{ops}
 		c.state = CS_WAIT_MANY
 	case CS_WAIT_MANY:
-		c.rest = append(c.rest, ops.Clone())
+		c.rest = append(c.rest, ops)
 	}
 }
 
-func (c *Controller) OnServerAck(rev int) {
+func (c *Controller) OnServerAck(rev int, ops Ops) {
 	switch c.state {
 	case CS_SYNCED:
 		panic("bad ack")
 	case CS_WAIT_ONE:
 		c.serverRev = rev
+		c.serverDoc.Apply(ops)
 		c.first = nil
 		c.state = CS_SYNCED
 	case CS_WAIT_MANY:
 		c.serverRev = rev
-		c.first = ComposeAll(c.rest)
+		c.serverDoc.Apply(ops)
+		c.first = Normalize(ComposeAll(c.rest))
 		c.rest = nil
-		c.conn.Send(c.serverRev, c.first)
+		c.conn.Send(c.serverRev, c.serverDoc.String(), c.first)
 		c.state = CS_WAIT_ONE
 	}
 }
 
 func (c *Controller) OnServerWrite(rev int, ops Ops) {
+	c.serverDoc.Apply(ops)
 	switch c.state {
 	case CS_SYNCED:
 		c.serverRev = rev

@@ -37,5 +37,6 @@ type Msg struct {
 	Name string `json:",omitempty"`
 	Fd   int    `json:",omitempty"`
 	Rev  int    `json:",omitempty"`
+	Hash string `json:",omitempty"`
 	Ops  ot.Ops `json:",omitempty"`
 }

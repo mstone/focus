@@ -59,12 +59,14 @@ type Write struct {
 	Conn chan interface{}
 	Doc  chan interface{}
 	Rev  int
+	Hash string
 	Ops  ot.Ops
 }
 
 type Writeresp struct {
 	Doc chan interface{}
 	Rev int
+	Ops ot.Ops
 }
 
 // processed by doc for tests

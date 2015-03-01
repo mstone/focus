@@ -116,6 +116,7 @@ func (c *conn) onVppWrite(m msg.Msg) {
 	doc <- im.Write{
 		Conn: c.msgs,
 		Rev:  m.Rev,
+		Hash: m.Hash,
 		Ops:  m.Ops.Clone(),
 	}
 }
@@ -158,6 +159,7 @@ func (c *conn) writeLoop() {
 				Cmd: msg.C_WRITE_RESP,
 				Fd:  fd,
 				Rev: v.Rev,
+				Ops: v.Ops.Clone(),
 			})
 		case im.Write:
 			fd, ok := c.getFd(v.Doc)

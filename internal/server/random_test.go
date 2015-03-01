@@ -120,12 +120,13 @@ func (c *client) String() string {
 	return fmt.Sprintf("%s", c.clname)
 }
 
-func (c *client) Send(rev int, ops ot.Ops) {
+func (c *client) Send(rev int, hash string, ops ot.Ops) {
 	c.ws.SetWriteTimeout(writeTimeout)
 	m := msg.Msg{
-		Cmd: msg.C_WRITE,
-		Rev: rev,
-		Ops: ops.Clone(),
+		Cmd:  msg.C_WRITE,
+		Rev:  rev,
+		Hash: hash,
+		Ops:  ops.Clone(),
 	}
 	// c.l.Info("send", "num", c.numSend, "rev", c.rev, "ops", ops)
 	err := c.ws.WriteJSON(m)
@@ -138,16 +139,19 @@ func (c *client) Send(rev int, ops ot.Ops) {
 
 func (c *client) Recv(ops ot.Ops) {
 	c.doc.Apply(ops.Clone())
-	c.l.Info("stat", "body", c.doc.String(), "clnst", c.st)
+	// c.l.Info("stat", "body", c.doc.String(), "clnst", c.st)
 }
 
 func (c *client) onWriteResp(m msg.Msg) {
-	c.st.OnServerAck(m.Rev)
+	c.l.Info("recv", "num", c.numRecv, "kind", "ack1", "rev", m.Rev, "ops", m.Ops, "clnhist", c.doc.String(), "clnst", c.st)
+	c.st.OnServerAck(m.Rev, m.Ops)
+	c.l.Info("recv", "num", c.numRecv, "kind", "ack2", "rev", m.Rev, "ops", m.Ops, "clnhist", c.doc.String(), "clnst", c.st)
 }
 
 func (c *client) onWrite(m msg.Msg) {
-	c.l.Info("recv", "num", c.numRecv, "kind", "wrt", "rev", m.Rev, "ops", m.Ops, "clnhist", c.doc.String(), "clnst", c.st)
+	c.l.Info("recv", "num", c.numRecv, "kind", "wrt1", "rev", m.Rev, "ops", m.Ops, "clnhist", c.doc.String(), "clnst", c.st)
 	c.st.OnServerWrite(m.Rev, m.Ops.Clone())
+	c.l.Info("recv", "num", c.numRecv, "kind", "wrt2", "rev", m.Rev, "ops", m.Ops, "clnhist", c.doc.String(), "clnst", c.st)
 }
 
 func (c *client) loop() {

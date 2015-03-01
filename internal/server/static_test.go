@@ -15,13 +15,14 @@ type cl struct {
 	num      int
 }
 
-func (c *cl) Send(rev int, ops ot.Ops) {
+func (c *cl) Send(rev int, hash string, ops ot.Ops) {
 	c.t.Logf("S: %d, rev: %d, ops: %s", c.num, rev, ops)
 	m := msg.Msg{
-		Cmd: msg.C_WRITE,
-		Fd:  0,
-		Rev: rev,
-		Ops: ops,
+		Cmd:  msg.C_WRITE,
+		Fd:   0,
+		Rev:  rev,
+		Hash: hash,
+		Ops:  ops,
 	}
 	c.wsa.WriteJSON(m)
 }
@@ -64,7 +65,7 @@ func TestStatic(t *testing.T) {
 		cls[i].wsa.ReadJSON(&m)
 		switch m.Cmd {
 		case msg.C_WRITE_RESP:
-			cls[i].st.OnServerAck(m.Rev)
+			cls[i].st.OnServerAck(m.Rev, m.Ops)
 		case msg.C_WRITE:
 			cls[i].st.OnServerWrite(m.Rev, m.Ops)
 		}
@@ -74,15 +75,9 @@ func TestStatic(t *testing.T) {
 			recv(i)
 		}
 	}
-	I := func(s string) ot.Op {
-		return ot.Op{0, ot.AsRunes(s)}
-	}
-	D := func(n int) ot.Op {
-		return ot.Op{-n, nil}
-	}
-	R := func(n int) ot.Op {
-		return ot.Op{n, nil}
-	}
+	I := ot.I
+	D := ot.D
+	R := ot.R
 	_ = recvFlight
 	_ = I
 	_ = D
