@@ -204,69 +204,38 @@ func TestCompose(t *testing.T) {
 	table := []ComposeCase{
 		ComposeCase{
 			A: [2]Ops{
-				Ops{
-					Op{0, []rune{'a'}},
-				},
-				Ops{
-					Op{1, nil},
-					Op{0, []rune{'b'}},
-				},
+				Ops{I("a")},
+				Ops{R(1), I("b")},
 			},
-			B: Ops{
-				Op{0, []rune{'a', 'b'}},
-			},
+			B: Ops{I("ab")},
 		},
 		ComposeCase{
 			A: [2]Ops{
-				Ops{Op{0, []rune{'a'}}},
-				Ops{Op{-1, nil}},
+				Ops{I("a")},
+				Ops{D(1)},
 			},
 			B: Ops{},
 		},
 		ComposeCase{
 			A: [2]Ops{
-				Ops{
-					Op{0, []rune{'e', 'x'}},
-				},
-				Ops{
-					Op{2, nil},
-					Op{0, []rune{'4'}},
-				},
+				Ops{I("ex")},
+				Ops{R(2), I("4")},
 			},
-			B: Ops{
-				Op{0, []rune{'e', 'x', '4'}},
-			},
+			B: Ops{I("ex4")},
 		},
 		ComposeCase{
 			A: [2]Ops{
-				Ops{
-					Op{0, []rune{'x'}},
-				},
-				Ops{
-					Op{1, nil},
-					Op{0, []rune{'4'}},
-				},
+				Ops{I("x")},
+				Ops{R(1), I("4")},
 			},
-			B: Ops{
-				Op{0, []rune{'x', '4'}},
-			},
+			B: Ops{I("x4")},
 		},
 		ComposeCase{
 			A: [2]Ops{
-				Ops{
-					Op{0, []rune{'e', 'x'}},
-					Op{0, nil},
-				},
-				Ops{
-					Op{1, nil},
-					Op{0, []rune{'4'}},
-					Op{1, nil},
-				},
+				Ops{I("ex")},
+				Ops{R(1), I("4"), R(1)},
 			},
-			B: Ops{
-				Op{0, []rune{'e', '4', 'x'}},
-				Op{0, nil},
-			},
+			B: Ops{I("e4x")},
 		},
 	}
 
@@ -295,69 +264,22 @@ func TestInsert(t *testing.T) {
 		InsertCase{
 			A: Ops{},
 			B: AsRunes("a"),
-			C: Ops{
-				Op{
-					Size: 0,
-					Body: AsRunes("a"),
-				},
-			},
+			C: Ops{I("a")},
 		},
 		InsertCase{
-			A: Ops{
-				Op{
-					Size: 0,
-					Body: AsRunes("a"),
-				},
-			},
+			A: Ops{I("a")},
 			B: AsRunes("b"),
-			C: Ops{
-				Op{
-					Size: 0,
-					Body: AsRunes("ab"),
-				},
-			},
+			C: Ops{I("ab")},
 		},
 		InsertCase{
-			A: Ops{
-				Op{
-					Size: 0,
-					Body: AsRunes("a"),
-				},
-				Op{
-					Size: -2,
-					Body: nil,
-				},
-			},
+			A: Ops{I("a"), D(2)},
 			B: AsRunes("b"),
-			C: Ops{
-				Op{
-					Size: 0,
-					Body: AsRunes("ab"),
-				},
-				Op{
-					Size: -2,
-					Body: nil,
-				},
-			},
+			C: Ops{I("ab"), D(2)},
 		},
 		InsertCase{
-			A: Ops{
-				Op{
-					Size: -2,
-					Body: nil,
-				},
-			},
+			A: Ops{D(2)},
 			B: AsRunes("a"),
-			C: Ops{
-				Op{
-					Size: 0,
-					Body: AsRunes("a"),
-				},
-				Op{
-					Size: -2,
-					Body: nil,
-				},
-			},
+			C: Ops{I("a"), D(2)},
 		},
 	}
 

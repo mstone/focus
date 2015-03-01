@@ -84,6 +84,13 @@ func (o *Op) IsInsert() bool {
 	// return o.Size == 0 && len(o.Body) > 0
 }
 
+func (o *Op) IsZero() bool {
+	if o == nil {
+		return true
+	}
+	return o.Size == 0 && len(o.Body) == 0
+}
+
 func (o *Op) Len() int {
 	switch {
 	case o == nil:
@@ -116,13 +123,15 @@ func AsString(rs []rune) string {
 func (o *Op) String() string {
 	switch {
 	case o == nil:
-		return "N "
+		return "N"
 	case o.IsDelete():
 		return fmt.Sprintf("D%d", -o.Size)
 	case o.IsRetain():
 		return fmt.Sprintf("R%d", o.Size)
 	case o.IsInsert():
 		return fmt.Sprintf("I%s", AsString(o.Body))
+	case o.IsZero():
+		return "Z"
 	default:
 		return fmt.Sprintf("E%#v", o)
 	}
@@ -160,6 +169,10 @@ func (os Ops) Last() *Op {
 
 func (os Ops) Rest() Ops {
 	return os[1:]
+}
+
+func (os Ops) Empty() bool {
+	return len(os) == 0
 }
 
 func (op *Op) extendBody(rhs []rune) {
