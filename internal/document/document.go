@@ -86,14 +86,21 @@ func (d *doc) transform(rev int, clientOps ot.Ops) (int, ot.Ops) {
 		concurrentServerOps = d.hist[rev:]
 	}
 
-	// compose concurrent ops
-	serverOps := ot.Ops{}
-	for _, concurrentOp := range concurrentServerOps {
-		serverOps = ot.Compose(serverOps, concurrentOp)
-	}
+	// BUG(mistone): ot.Transform DOES NOT CALCULATE PUSHOUTS.
+	// // compose concurrent ops
+	// serverOps := ot.Ops{}
+	// for _, concurrentOp := range concurrentServerOps {
+	// 	serverOps = ot.Compose(serverOps, concurrentOp)
+	// }
 
-	// produce transformed ops
-	forServer, _ := ot.Transform(clientOps, serverOps)
+	// // produce transformed ops
+	// forServer, _ := ot.Transform(clientOps, serverOps)
+
+	for _, concurrentOp := range concurrentServerOps {
+		clientOps2, _ := ot.Transform(clientOps, concurrentOp)
+		clientOps = clientOps2.Clone()
+	}
+	forServer := clientOps
 
 	// update history
 	// d.hist = append(d.hist, transformedOps)

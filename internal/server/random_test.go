@@ -158,16 +158,16 @@ func (c *client) onWrite(m msg.Msg) {
 
 func (c *client) loop() {
 	round := 0
-	for round = 0; round < numRounds; round++ {
-		c.sendRandomOps()
-	}
+	// for round = 0; round < numRounds; round++ {
+	// 	c.sendRandomOps()
+	// }
 
 Loop:
 	for {
-		// if round < numRounds {
-		// 	c.sendRandomOps()
-		// 	round++
-		// }
+		if round < numRounds {
+			c.sendRandomOps()
+			round++
+		}
 
 		m := msg.Msg{}
 		c.ws.SetReadTimeout(readTimeout)
