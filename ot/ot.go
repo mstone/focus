@@ -410,6 +410,9 @@ func ComposeAll(all []Ops) Ops {
 }
 
 func Transform(as, bs Ops) (Ops, Ops) {
+	if bs.Empty() {
+		return as.Clone(), bs.Clone()
+	}
 	r1, r2 := transform1(as, bs)
 	r1 = Normalize(r1)
 	r2 = Normalize(r2)

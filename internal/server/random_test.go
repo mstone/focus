@@ -17,15 +17,17 @@ import (
 	"github.com/mstone/focus/ot"
 )
 
-// const numClients = 4
-// const numRounds = 3
-// const numChars = 8
-
-const numClients = 3
-const numRounds = 3
-const numChars = 3
-const readTimeout = 50 * time.Millisecond
+const numClients = 4
+const numRounds = 10
+const numChars = 10
+const readTimeout = 100 * time.Millisecond
 const writeTimeout = 500 * time.Millisecond
+
+// const numClients = 3
+// const numRounds = 3
+// const numChars = 3
+// const readTimeout = 50 * time.Millisecond
+// const writeTimeout = 500 * time.Millisecond
 
 type ws struct {
 	rq, wq chan interface{}
@@ -156,13 +158,16 @@ func (c *client) onWrite(m msg.Msg) {
 
 func (c *client) loop() {
 	round := 0
+	for round = 0; round < numRounds; round++ {
+		c.sendRandomOps()
+	}
 
 Loop:
 	for {
-		if round < numRounds {
-			c.sendRandomOps()
-			round++
-		}
+		// if round < numRounds {
+		// 	c.sendRandomOps()
+		// 	round++
+		// }
 
 		m := msg.Msg{}
 		c.ws.SetReadTimeout(readTimeout)

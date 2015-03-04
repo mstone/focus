@@ -305,7 +305,7 @@ type TransformCase struct {
 func doTransformTable(t *testing.T, cases []TransformCase) {
 	for idx, c := range cases {
 		t.Logf("transform %d, transforming A: %s, B: %s, expecting C: %s, D: %s", idx, c.A, c.B, c.C, c.D)
-		x, y := Transform(c.A, c.B)
+		x, y := Transform(c.B, c.A)
 		if !reflect.DeepEqual(x, c.C) {
 			t.Errorf("transform %d failed;\n\tA: %s\n\tB: %s\n\tC: %s\n\tD: %s\n\tx: %s\n\ty: %s", idx, c.A, c.B, c.C, c.D, x, y)
 		}
@@ -317,19 +317,104 @@ func doTransformTable(t *testing.T, cases []TransformCase) {
 
 func TestTransform(t *testing.T) {
 	table := []TransformCase{
-		// xy     x5y
-		// xby    x5by
+		// xy  A  x5y           I I
+		// B       C
+		// xby D  xb5y
 		TransformCase{
 			A: Ops{R(1), I("5"), R(1)},
 			B: Ops{R(1), I("b"), R(1)},
-			C: Ops{R(1), I("5"), R(2)},
-			D: Ops{R(2), I("b"), R(1)},
+			C: Ops{R(1), I("b"), R(2)},
+			D: Ops{R(2), I("5"), R(1)},
 		},
+		//  [?]    A     []     D I
+		//  B             C
+		//  [1b?]  D   [1b]
 		TransformCase{
 			A: Ops{Z(), D(1), Z()},
 			B: Ops{Z(), I("1b"), R(1)},
+			C: Ops{I("1b")},
+			D: Ops{R(2), D(1)},
+		},
+		//  [?]  A   [1b]       ID D
+		//  B           C
+		//  []   D   [1b]
+		TransformCase{
+			A: Ops{Z(), I("1b"), D(1), Z()},
+			B: Ops{Z(), D(1), Z()},
+			C: Ops{R(2)},
+			D: Ops{I("1b")},
+		},
+		//  [?]  A   [1b?]       I D
+		//  B           C
+		//  []   D   [1b]
+		TransformCase{
+			A: Ops{Z(), I("1b"), R(1), Z()},
+			B: Ops{Z(), D(1), Z()},
 			C: Ops{R(2), D(1)},
 			D: Ops{I("1b")},
+		},
+		//  [?]  A   [?]       R D
+		//  B         C
+		//  []   D   []
+		TransformCase{
+			A: Ops{Z(), R(1), Z()},
+			B: Ops{Z(), D(1), Z()},
+			C: Ops{D(1)},
+			D: Ops{},
+		},
+		//  [?]  A   []        D R
+		//  B         C
+		//  [?]   D  []
+		TransformCase{
+			A: Ops{Z(), D(1), Z()},
+			B: Ops{Z(), R(1), Z()},
+			C: Ops{},
+			D: Ops{D(1)},
+		},
+		//  [xyxy]  A   [xy]        D/D
+		//  B             C
+		//  [xy]   D      []
+		TransformCase{
+			A: Ops{R(1), D(2), R(1)},
+			B: Ops{D(1), R(2), D(1)},
+			C: Ops{D(2)},
+			D: Ops{D(2)},
+		},
+		//  [xyxy]  A   [x]        D/D
+		//  B             C
+		//  [xaby]  D   [ab]
+		TransformCase{
+			A: Ops{D(2), R(1), D(1)},
+			B: Ops{R(1), I("ab"), D(2), R(1)},
+			C: Ops{I("ab"), D(1)},
+			D: Ops{D(1), R(2), D(1)},
+		},
+		//     A:Ia R2          I/I
+		//B:Z Z R2    C
+		//        D
+		TransformCase{
+			A: Ops{I("a"), R(2)},
+			B: Ops{Z(), Z(), R(2)},
+			C: Ops{R(3)},
+			D: Ops{I("a"), R(2)},
+		},
+		//     A:Ia R2          I/I
+		//B:R1 I6 R1    C
+		//        D
+		TransformCase{
+			A: Ops{I("a"), R(2)},
+			B: Ops{R(1), I("6"), R(1)},
+			C: Ops{R(2), I("6"), R(1)},
+			D: Ops{I("a"), R(3)},
+		},
+		//     A:I0 R3          I/I
+		//B:R2 I6 R1    C
+		//        D
+		TransformCase{
+			A: Ops{I("0"), R(3)},
+			B: Ops{R(2), I("6"), R(1)},
+			C: Ops{R(3), I("6"), R(1)},
+			D: Ops{I("0"), R(4)},
 		},
 	}
 	doTransformTable(t, table)
