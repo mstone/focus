@@ -50,8 +50,6 @@ go get -u github.com/tools/godep
 
 go get -d github.com/mstone/gopherjs
 cd $GOPATH/src/github.com/mstone/gopherjs
-git remote update
-git checkout -b go1.3 origin/go1.3
 godep go install
 
 go get -d github.com/mstone/focus
