@@ -3,10 +3,12 @@
 package js_test
 
 import (
-	"github.com/gopherjs/gopherjs/js"
+	"fmt"
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/gopherjs/gopherjs/js"
 )
 
 var dummys = js.Global.Call("eval", `({
@@ -19,8 +21,8 @@ var dummys = js.Global.Call("eval", `({
 		return a + b;
 	},
 	mapArray: function(array, f) {
-		var newArray = new Array(array.length), i;
-		for (i = 0; i < array.length; i++) {
+		var newArray = new Array(array.length);
+		for (var i = 0; i < array.length; i++) {
 			newArray[i] = f(array[i]);
 		}
 		return newArray;
@@ -36,7 +38,10 @@ var dummys = js.Global.Call("eval", `({
 	},
 	isEqual: function(a, b) {
 		return a === b;
-	}
+	},
+	call: function(f, a) {
+		f(a);
+	},
 })`)
 
 func TestBool(t *testing.T) {
@@ -56,13 +61,13 @@ func TestBool(t *testing.T) {
 func TestStr(t *testing.T) {
 	e := "abc\u1234"
 	o := dummys.Get("someString")
-	if v := o.Str(); v != e {
+	if v := o.String(); v != e {
 		t.Errorf("expected %#v, got %#v", e, v)
 	}
 	if i := o.Interface().(string); i != e {
 		t.Errorf("expected %#v, got %#v", e, i)
 	}
-	if dummys.Set("otherString", e); dummys.Get("otherString").Str() != e {
+	if dummys.Set("otherString", e); dummys.Get("otherString").String() != e {
 		t.Fail()
 	}
 }
@@ -95,15 +100,16 @@ func TestFloat(t *testing.T) {
 	}
 }
 
-func TestIsUndefined(t *testing.T) {
-	if dummys.IsUndefined() || !dummys.Get("xyz").IsUndefined() {
+func TestUndefined(t *testing.T) {
+	if dummys == js.Undefined || dummys.Get("xyz") != js.Undefined {
 		t.Fail()
 	}
 }
 
-func TestIsNull(t *testing.T) {
+func TestNull(t *testing.T) {
+	var null *js.Object
 	dummys.Set("test", nil)
-	if dummys.IsNull() || !dummys.Get("test").IsNull() {
+	if null != nil || dummys == nil || dummys.Get("test") != nil {
 		t.Fail()
 	}
 }
@@ -132,6 +138,9 @@ func TestCall(t *testing.T) {
 	if dummys.Call("add", i, 2).Int() != 42 {
 		t.Fail()
 	}
+	if dummys.Call("add", js.Global.Call("eval", "40"), 2).Int() != 42 {
+		t.Fail()
+	}
 }
 
 func TestInvoke(t *testing.T) {
@@ -148,13 +157,13 @@ func TestNew(t *testing.T) {
 }
 
 type StructWithJsField1 struct {
-	js.Object
+	*js.Object
 	Length int                  `js:"length"`
 	Slice  func(int, int) []int `js:"slice"`
 }
 
 type StructWithJsField2 struct {
-	object js.Object            // to hide members from public API
+	object *js.Object           // to hide members from public API
 	Length int                  `js:"length"`
 	Slice  func(int, int) []int `js:"slice"`
 }
@@ -203,6 +212,43 @@ func TestCallingJsField(t *testing.T) {
 	}
 }
 
+func TestUnboxing(t *testing.T) {
+	a := StructWithJsField1{Object: js.Global.Get("Object").New()}
+	b := &StructWithJsField2{object: js.Global.Get("Object").New()}
+	if !dummys.Call("isEqual", a, a.Object).Bool() || !dummys.Call("isEqual", b, b.object).Bool() {
+		t.Fail()
+	}
+	wa := Wrapper1{StructWithJsField1: a}
+	wb := Wrapper2{innerStruct: b}
+	if !dummys.Call("isEqual", wa, a.Object).Bool() || !dummys.Call("isEqual", wb, b.object).Bool() {
+		t.Fail()
+	}
+}
+
+func TestBoxing(t *testing.T) {
+	o := js.Global.Get("Object").New()
+	dummys.Call("call", func(a StructWithJsField1) {
+		if a.Object != o {
+			t.Fail()
+		}
+	}, o)
+	dummys.Call("call", func(a *StructWithJsField2) {
+		if a.object != o {
+			t.Fail()
+		}
+	}, o)
+	dummys.Call("call", func(a Wrapper1) {
+		if a.Object != o {
+			t.Fail()
+		}
+	}, o)
+	dummys.Call("call", func(a Wrapper2) {
+		if a.innerStruct.object != o {
+			t.Fail()
+		}
+	}, o)
+}
+
 func TestFunc(t *testing.T) {
 	a := dummys.Call("mapArray", []int{1, 2, 3}, func(e int64) int64 { return e + 40 })
 	b := dummys.Call("mapArray", []int{1, 2, 3}, func(e ...int64) int64 { return e[0] + 40 })
@@ -210,7 +256,7 @@ func TestFunc(t *testing.T) {
 		t.Fail()
 	}
 
-	add := dummys.Get("add").Interface().(func(...interface{}) js.Object)
+	add := dummys.Get("add").Interface().(func(...interface{}) *js.Object)
 	var i int64 = 40
 	if add(i, 2).Int() != 42 {
 		t.Fail()
@@ -233,24 +279,15 @@ func TestEquality(t *testing.T) {
 	if js.Global.Get("Array") != js.Global.Get("Array") || js.Global.Get("Array") == js.Global.Get("String") {
 		t.Fail()
 	}
-}
-
-func TestThis(t *testing.T) {
-	dummys.Set("testThis", func(_ string) { // string argument to force wrapping
-		if js.This != dummys {
-			t.Fail()
-		}
-	})
-	dummys.Call("testThis", "")
-}
-
-func TestArguments(t *testing.T) {
-	dummys.Set("testArguments", func() {
-		if len(js.Arguments) != 3 || js.Arguments[1].Int() != 1 {
-			t.Fail()
-		}
-	})
-	dummys.Call("testArguments", 0, 1, 2)
+	type S struct{ *js.Object }
+	o1 := js.Global.Get("Object").New()
+	o2 := js.Global.Get("Object").New()
+	a := S{o1}
+	b := S{o1}
+	c := S{o2}
+	if a != b || a == c {
+		t.Fail()
+	}
 }
 
 func TestSameFuncWrapper(t *testing.T) {
@@ -291,30 +328,11 @@ func TestError(t *testing.T) {
 			t.Fail()
 		}
 		jsErr, ok := err.(*js.Error)
-		if !ok || jsErr.Get("stack").IsUndefined() {
+		if !ok || jsErr.Get("stack") == js.Undefined {
 			t.Fail()
 		}
 	}()
 	js.Global.Get("notExisting").Call("throwsError")
-}
-
-type S struct {
-	js.Object
-}
-
-func TestReflection(t *testing.T) {
-	if reflect.TypeOf(dummys).String() != "js.Object" || reflect.ValueOf(dummys).Type().String() != "js.Object" {
-		t.Fail()
-	}
-	v := reflect.ValueOf(dummys)
-	if v.Interface() != dummys || v.Interface().(js.Object) != dummys {
-		t.Fail()
-	}
-	var s S
-	reflect.ValueOf(&s).Elem().Field(0).Set(v)
-	if s.Object != dummys {
-		t.Fail()
-	}
 }
 
 type F struct {
@@ -330,18 +348,109 @@ func TestExternalizeField(t *testing.T) {
 	}
 }
 
+func TestMakeFunc(t *testing.T) {
+	o := js.Global.Get("Object").New()
+	o.Set("f", js.MakeFunc(func(this *js.Object, arguments []*js.Object) interface{} {
+		if this != o {
+			t.Fail()
+		}
+		if len(arguments) != 2 || arguments[0].Int() != 1 || arguments[1].Int() != 2 {
+			t.Fail()
+		}
+		return 3
+	}))
+	if o.Call("f", 1, 2).Int() != 3 {
+		t.Fail()
+	}
+}
+
 type M struct {
-	x int
+	f int
 }
 
-func (m *M) Method(x int) {
-	m.x = x
+func (m *M) Method(a interface{}) map[string]string {
+	if a.(map[string]interface{})["x"].(float64) != 1 || m.f != 42 {
+		return nil
+	}
+	return map[string]string{
+		"y": "z",
+	}
 }
 
-func TestExternalizeNamed(t *testing.T) {
-	m := &M{}
-	dummys.Call("testMethod", m)
-	if m.x != 42 {
+func TestMakeWrapper(t *testing.T) {
+	if !js.Global.Call("eval", `(function(m) { return m.Method({x: 1})["y"] === "z"; })`).Invoke(js.MakeWrapper(&M{42})).Bool() {
+		t.Fail()
+	}
+}
+
+func TestReflection(t *testing.T) {
+	o := js.Global.Call("eval", "({ answer: 42 })")
+	if reflect.ValueOf(o).Interface().(*js.Object) != o {
+		t.Fail()
+	}
+
+	type S struct {
+		Field *js.Object
+	}
+	s := S{o}
+
+	v := reflect.ValueOf(&s).Elem()
+	if v.Field(0).Interface().(*js.Object).Get("answer").Int() != 42 {
+		t.Fail()
+	}
+	if v.Field(0).MethodByName("Get").Call([]reflect.Value{reflect.ValueOf("answer")})[0].Interface().(*js.Object).Int() != 42 {
+		t.Fail()
+	}
+	v.Field(0).Set(reflect.ValueOf(js.Global.Call("eval", "({ answer: 100 })")))
+	if s.Field.Get("answer").Int() != 100 {
+		t.Fail()
+	}
+
+	if fmt.Sprintf("%+v", s) != "{Field:[object Object]}" {
+		t.Fail()
+	}
+}
+
+func TestNil(t *testing.T) {
+	type S struct{ X int }
+	var s *S
+	if !dummys.Call("isEqual", s, nil).Bool() {
+		t.Fail()
+	}
+
+	type T struct{ Field *S }
+	if dummys.Call("testField", T{}) != nil {
+		t.Fail()
+	}
+}
+
+func TestNewArrayBuffer(t *testing.T) {
+	b := []byte("abcd")
+	a := js.NewArrayBuffer(b[1:3])
+	if a.Get("byteLength").Int() != 2 {
+		t.Fail()
+	}
+}
+
+func TestInternalizeExternalizeUndefined(t *testing.T) {
+	type S struct {
+		*js.Object
+	}
+	r := js.Global.Call("eval", "(function(f) { return f(undefined); })").Invoke(func(s S) S {
+		if s.Object != js.Undefined {
+			t.Fail()
+		}
+		return s
+	})
+	if r != js.Undefined {
+		t.Fail()
+	}
+}
+
+func TestDereference(t *testing.T) {
+	s := *dummys
+	p := &s
+	if p != dummys {
 		t.Fail()
 	}
 }

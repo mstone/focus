@@ -41,18 +41,18 @@ import (
 )
 
 type Range struct {
-	doc       js.Object
-	textRange js.Object
+	doc       *js.Object
+	textRange *js.Object
 }
 
-func NewRange(doc js.Object, textRange js.Object) *Range {
+func NewRange(doc *js.Object, textRange *js.Object) *Range {
 	return &Range{
 		doc:       doc,
 		textRange: textRange,
 	}
 }
 
-func (r *Range) asLinearIndex(pos js.Object) int {
+func (r *Range) asLinearIndex(pos *js.Object) int {
 	// add the lengths of the lines before startRow, plus
 	// startCol, plus 1 * startRow for the line delimiters
 	row := pos.Get("row").Int()
@@ -78,7 +78,7 @@ func (r *Range) End() int {
 	return r.asLinearIndex(end)
 }
 
-func RowCol(doc js.Object, pos int) js.Object {
+func RowCol(doc *js.Object, pos int) *js.Object {
 	var row, col int
 	lines := doc.Call("getAllLines")
 	// alert.String("lines")
@@ -99,7 +99,7 @@ func RowCol(doc js.Object, pos int) js.Object {
 	return obj
 }
 
-func StartEnd(doc js.Object, start, end int) js.Object {
+func StartEnd(doc *js.Object, start, end int) *js.Object {
 	ret := js.Global.Get("Object").New()
 	ret.Set("start", RowCol(doc, start))
 	ret.Set("end", RowCol(doc, end))
@@ -107,9 +107,9 @@ func StartEnd(doc js.Object, start, end int) js.Object {
 }
 
 type Adapter struct {
-	conn     js.Object
-	session  js.Object
-	doc      js.Object
+	conn     *js.Object
+	session  *js.Object
+	doc      *js.Object
 	state    *ot.Controller
 	suppress bool
 	fd       int
@@ -137,7 +137,9 @@ func (a *Adapter) Send(rev int, hash string, ops ot.Ops) {
 			Ops:  ops,
 		})
 		alert.Golang(fmt.Sprintf("sending jsops: %s", jsOps))
-		a.conn.Call("send", jsOps)
+		go func() {
+			a.conn.Call("send", jsOps)
+		}()
 	}
 }
 
@@ -177,18 +179,18 @@ func (a *Adapter) AttachFd(fd int) {
 	a.fd = fd
 }
 
-func (a *Adapter) AttachEditor(session js.Object, doc js.Object) {
+func (a *Adapter) AttachEditor(session *js.Object, doc *js.Object) {
 	a.session = session
 	a.doc = doc
 	doc.Call("on", "change", a.OnChange)
 }
 
-func (a *Adapter) AttachSocket(state *ot.Controller, conn js.Object) {
+func (a *Adapter) AttachSocket(state *ot.Controller, conn *js.Object) {
 	a.state = state
 	a.conn = conn
 }
 
-func (a *Adapter) OnChange(change js.Object) bool {
+func (a *Adapter) OnChange(change *js.Object) bool {
 	if a.IsSuppressed() {
 		alert.String("change SUPPRESSED")
 		return true
@@ -243,6 +245,6 @@ func (a *Adapter) OnChange(change js.Object) bool {
 	alert.String("sending ops")
 	alert.Golang(ops)
 
-	(*a.state).OnClientWrite(ops)
+	go a.state.OnClientWrite(ops)
 	return true
 }

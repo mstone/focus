@@ -16,7 +16,7 @@ func String(s string) {
 	js.Global.Get("console").Call("log", s)
 }
 
-func JSON(o js.Object) {
+func JSON(o *js.Object) {
 	s := o.String()
 	//js.Global.Get("JSON").Call("stringify", o).String()
 	js.Global.Get("console").Call("log", s)

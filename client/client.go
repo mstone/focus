@@ -16,14 +16,14 @@ import (
 )
 
 func main() {
-	var aceDiv js.Object
-	var aceObj js.Object
-	var adapter ace.Adapter
+	var aceDiv *js.Object
+	var aceObj *js.Object
+	var adapter *ace.Adapter
 	var state *ot.Controller
-	var conn js.Object
-	var doc js.Object
-	var editor js.Object
-	var session js.Object
+	var conn *js.Object
+	var doc *js.Object
+	var editor *js.Object
+	var session *js.Object
 
 	// configure ACE + attach adapter
 	aceDiv = js.Global.Get("document").Call("getElementById", "editor")
@@ -41,25 +41,29 @@ func main() {
 	doc = editor.Call("getSession").Call("getDocument")
 	doc.Call("setNewLineMode", "unix")
 
+	adapter = ace.NewAdapter()
 	adapter.AttachEditor(session, doc)
 
 	// configure socket
 	apiEndPoint := aceDiv.Get("dataset").Get("vppApi")
 	vaporpadName := aceDiv.Get("dataset").Get("vppName")
 
+	state = ot.NewController(adapter, adapter)
 	conn = js.Global.Get("WebSocket").New(apiEndPoint.String())
 
-	conn.Set("onclose", func(e js.Object) {
+	conn.Set("onclose", func(e *js.Object) {
 	})
-	conn.Set("onopen", func(e js.Object) {
-		state = ot.NewController(&adapter, &adapter)
+	conn.Set("onopen", func(e *js.Object) {
+
 		jsOps, _ := json.Marshal(msg.Msg{
 			Cmd:  msg.C_OPEN,
 			Name: vaporpadName.String(),
 		})
-		conn.Call("send", jsOps)
+		go func() {
+			conn.Call("send", jsOps)
+		}()
 	})
-	conn.Set("onmessage", func(e js.Object) {
+	conn.Set("onmessage", func(e *js.Object) {
 		m := msg.Msg{}
 
 		err := json.Unmarshal([]byte(e.Get("data").String()), &m)

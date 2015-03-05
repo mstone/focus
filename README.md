@@ -25,12 +25,12 @@ focus:
 
       * [gopkg.in/inconshreveable/log15.v2](https://gopkg.in/inconshreveable/log15.v2),
       * [mattn/go-sqlite3](https://github.com/mattn/go-sqlite3),
-      * [mattn/go-colorable](https://github.com/mattn/go-colorable)
-      * [gopherjs](https://github.com/gopherjs/gopherjs) (now forked for go1.3 compatibility: [mstone/gopherjs](https://github.com/mstone/gopherjs)),
-      * [codegangsta/negroni](https://github.com/codegangsta/negroni)
-      * [unrolled/render](https://github.com/unrolled/render)
-      * [gorilla/websocket](https://github.com/gorilla/websocket)
-      * [gofuzz](https://github.com/google/gofuzz)
+      * [mattn/go-colorable](https://github.com/mattn/go-colorable),
+      * [gopherjs](https://github.com/gopherjs/gopherjs),
+      * [codegangsta/negroni](https://github.com/codegangsta/negroni),
+      * [unrolled/render](https://github.com/unrolled/render),
+      * [gorilla/websocket](https://github.com/gorilla/websocket),
+      * [gofuzz](https://github.com/google/gofuzz),
 
   * bundles:
 
@@ -96,8 +96,6 @@ our versions of the relevant build-deps:
     ```bash
     go get -d github.com/mstone/gopherjs
     cd $GOPATH/src/github.com/mstone/gopherjs
-    git remote update
-    git checkout -b go1.3 origin/go1.3
     godep go install
     ```
 
