@@ -11,7 +11,8 @@ import (
 type Cmd int
 
 const (
-	C_OPEN Cmd = iota
+	C_NIL Cmd = iota
+	C_OPEN
 	C_OPEN_RESP
 	C_WRITE
 	C_WRITE_RESP
@@ -19,6 +20,8 @@ const (
 
 func (c Cmd) String() string {
 	switch c {
+	case C_NIL:
+		return "NIL"
 	case C_OPEN:
 		return "OPEN"
 	case C_OPEN_RESP:

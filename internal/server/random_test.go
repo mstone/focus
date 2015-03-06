@@ -5,6 +5,7 @@ package server
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	log "gopkg.in/inconshreveable/log15.v2"
 	"sync"
@@ -32,22 +33,29 @@ const writeTimeout = 500 * time.Millisecond
 type ws struct {
 	rq, wq chan interface{}
 	rt, wt *time.Timer
+	rm, wm sync.Mutex
 }
 
 func NewWSPair() (*ws, *ws) {
 	q1 := make(chan interface{}, numClients*numRounds*2)
 	q2 := make(chan interface{}, numClients*numRounds*2)
+	// q1 := make(chan interface{}, 0)
+	// q2 := make(chan interface{}, 0)
 	w1 := &ws{
 		rq: q1,
 		wq: q2,
-		rt: time.NewTimer(time.Duration(0)),
-		wt: time.NewTimer(time.Duration(0)),
+		rt: time.NewTimer(readTimeout),
+		wt: time.NewTimer(writeTimeout),
+		rm: sync.Mutex{},
+		wm: sync.Mutex{},
 	}
 	w2 := &ws{
 		rq: q2,
 		wq: q1,
-		rt: time.NewTimer(time.Duration(0)),
-		wt: time.NewTimer(time.Duration(0)),
+		rt: time.NewTimer(readTimeout),
+		wt: time.NewTimer(writeTimeout),
+		rm: sync.Mutex{},
+		wm: sync.Mutex{},
 	}
 	w1.rt.Stop()
 	w1.wt.Stop()
@@ -57,6 +65,9 @@ func NewWSPair() (*ws, *ws) {
 }
 
 func (w *ws) ReadJSON(v interface{}) error {
+	w.rm.Lock()
+	defer w.rm.Unlock()
+
 	select {
 	case <-w.rt.C:
 		return fmt.Errorf("ws read timeout")
@@ -68,6 +79,9 @@ func (w *ws) ReadJSON(v interface{}) error {
 }
 
 func (w *ws) WriteJSON(v interface{}) error {
+	w.wm.Lock()
+	defer w.wm.Unlock()
+
 	select {
 	case <-w.wt.C:
 		return fmt.Errorf("ws write timeout")
@@ -78,21 +92,35 @@ func (w *ws) WriteJSON(v interface{}) error {
 }
 
 func (w *ws) SetReadTimeout(d time.Duration) error {
-	w.rt.Reset(d)
+	w.rm.Lock()
+	defer w.rm.Unlock()
+
+	w.rt.Stop()
+	w.rt = time.NewTimer(d)
 	return nil
 }
 
 func (w *ws) SetWriteTimeout(d time.Duration) error {
-	w.wt.Reset(d)
+	w.wm.Lock()
+	defer w.wm.Unlock()
+
+	w.wt.Stop()
+	w.wt = time.NewTimer(d)
 	return nil
 }
 
 func (w *ws) CancelReadTimeout() error {
+	w.rm.Lock()
+	defer w.rm.Unlock()
+
 	w.rt.Stop()
 	return nil
 }
 
 func (w *ws) CancelWriteTimeout() error {
+	w.wm.Lock()
+	defer w.wm.Unlock()
+
 	w.wt.Stop()
 	return nil
 }
@@ -110,12 +138,12 @@ type client struct {
 }
 
 func (c *client) sendRandomOps() {
-	size := c.doc.Len()
+	// size := c.doc.Len()
 	ops := c.doc.GetRandomOps(numChars)
 
 	c.doc.Apply(ops)
 	c.st.OnClientWrite(ops.Clone())
-	c.l.Info("genn", "ops", ops, "docsize", size, "doc", c.doc.String(), "docp", fmt.Sprintf("%p", c.doc), "clnhist", c.doc.String(), "clnst", c.st)
+	// c.l.Info("genn", "ops", ops, "docsize", size, "doc", c.doc.String(), "docp", fmt.Sprintf("%p", c.doc), "clnhist", c.doc.String(), "clnst", c.st)
 }
 
 func (c *client) String() string {
@@ -145,15 +173,15 @@ func (c *client) Recv(ops ot.Ops) {
 }
 
 func (c *client) onWriteResp(m msg.Msg) {
-	c.l.Info("recv", "num", c.numRecv, "kind", "ack1", "rev", m.Rev, "ops", m.Ops, "clnhist", c.doc.String(), "clnst", c.st)
+	// c.l.Info("recv", "num", c.numRecv, "kind", "ack1", "rev", m.Rev, "ops", m.Ops, "clnhist", c.doc.String(), "clnst", c.st)
 	c.st.OnServerAck(m.Rev, m.Ops)
-	c.l.Info("recv", "num", c.numRecv, "kind", "ack2", "rev", m.Rev, "ops", m.Ops, "clnhist", c.doc.String(), "clnst", c.st)
+	// c.l.Info("recv", "num", c.numRecv, "kind", "ack2", "rev", m.Rev, "ops", m.Ops, "clnhist", c.doc.String(), "clnst", c.st)
 }
 
 func (c *client) onWrite(m msg.Msg) {
-	c.l.Info("recv", "num", c.numRecv, "kind", "wrt1", "rev", m.Rev, "ops", m.Ops, "clnhist", c.doc.String(), "clnst", c.st)
+	// c.l.Info("recv", "num", c.numRecv, "kind", "wrt1", "rev", m.Rev, "ops", m.Ops, "clnhist", c.doc.String(), "clnst", c.st)
 	c.st.OnServerWrite(m.Rev, m.Ops.Clone())
-	c.l.Info("recv", "num", c.numRecv, "kind", "wrt2", "rev", m.Rev, "ops", m.Ops, "clnhist", c.doc.String(), "clnst", c.st)
+	// c.l.Info("recv", "num", c.numRecv, "kind", "wrt2", "rev", m.Rev, "ops", m.Ops, "clnhist", c.doc.String(), "clnst", c.st)
 }
 
 func (c *client) loop() {
@@ -220,16 +248,29 @@ func testOnce(t *testing.T) {
 		)
 		clients[idx] = c
 
-		focusSrv.Connect(conn2)
+		_, err := focusSrv.Connect(conn2)
+		if err != nil {
+			panic(err)
+		}
 
-		conn.WriteJSON(msg.Msg{
+		conn.SetWriteTimeout(writeTimeout)
+		err = conn.WriteJSON(msg.Msg{
 			Cmd:  msg.C_OPEN,
 			Name: vpName,
 		})
+		conn.CancelWriteTimeout()
+		if err != nil {
+			panic(err)
+		}
 
 		// read open resp
 		m := msg.Msg{}
-		conn.ReadJSON(&m)
+		conn.SetReadTimeout(readTimeout)
+		err = conn.ReadJSON(&m)
+		conn.CancelReadTimeout()
+		if err != nil {
+			panic(err)
+		}
 
 		c.loop()
 	}
@@ -246,11 +287,11 @@ func testOnce(t *testing.T) {
 	sdr := <-sdrc
 	sd := sdr.Body
 
-	log.Info("stat", "obj", "doc", "body", sd)
+	// log.Info("stat", "obj", "doc", "body", sd)
 
 	for i := 0; i < numClients; i++ {
 		st := clients[i].st
-		log.Info("stat", "obj", "cln", "client", i, "body", clients[i].doc.String(), "clnst", st)
+		// log.Info("stat", "obj", "cln", "client", i, "body", clients[i].doc.String(), "clnst", st)
 		if !st.IsSynchronized() {
 			t.Fatalf("unsynchronized client[%d]; state: %q", i, st)
 		}
@@ -271,7 +312,10 @@ func testOnce(t *testing.T) {
 }
 
 func TestRandom(t *testing.T) {
-	for i := 0; i < 300; i++ {
+	iterations := 10
+	flag.IntVar(&iterations, "iterations", 10, "number of iterations to run tests")
+
+	for i := 0; i < iterations; i++ {
 		testOnce(t)
 	}
 }

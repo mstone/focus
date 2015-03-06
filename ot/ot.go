@@ -305,22 +305,6 @@ func shortenOps(a Op, b Op) (Op, Op) {
 	panic("unreachable")
 }
 
-func shortenOps2(a *Op, b *Op) (*Op, *Op) {
-	la := a.Len()
-	lb := b.Len()
-	switch {
-	case la == lb:
-		return nil, nil
-	case a != nil && b != nil && la > lb:
-		a2 := shorten(*a, lb)
-		return &a2, nil
-	case a != nil && b != nil && la <= lb:
-		b2 := shorten(*b, la)
-		return nil, &b2
-	}
-	return a, b
-}
-
 func addDeleteOp(d Op, os Ops) Ops {
 	if len(os) > 0 && os.First().IsInsert() {
 		ret := Ops{}
@@ -337,12 +321,10 @@ func addDeleteOp(d Op, os Ops) Ops {
 
 func Compose(as, bs Ops) Ops {
 	ret := Normalize(compose1(as, bs))
-	fmt.Printf("%s\n", ret)
 	return ret
 }
 
 func compose1(as, bs Ops) Ops {
-	fmt.Printf("compose: %s, %s -> ", as, bs)
 	ret := Ops{}
 	a := 0
 	b := 0
@@ -397,7 +379,6 @@ func compose1(as, bs Ops) Ops {
 		}
 		ret = append(ret, compose1(has, hbs)...)
 	}
-	fmt.Printf("%s\n", ret)
 	return ret
 }
 
@@ -416,12 +397,10 @@ func Transform(as, bs Ops) (Ops, Ops) {
 	r1, r2 := transform1(as, bs)
 	r1 = Normalize(r1)
 	r2 = Normalize(r2)
-	fmt.Printf("\n-> %s, %s\n", r1, r2)
 	return r1, r2
 }
 
 func transform1(as, bs Ops) (Ops, Ops) {
-	fmt.Printf("xform: %s, %s -> ", as, bs)
 	a := 0
 	b := 0
 
@@ -485,7 +464,6 @@ func transform1(as, bs Ops) (Ops, Ops) {
 
 	ret1 := append(ra, sa...)
 	ret2 := append(rb, sb...)
-	fmt.Printf("%s, %s -> ", ret1, ret2)
 	return ret1, ret2
 }
 
