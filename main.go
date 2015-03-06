@@ -7,10 +7,8 @@ package main
 import (
 	"database/sql"
 	"flag"
-	"go/build"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
 	"runtime"
 	"runtime/debug"
@@ -23,26 +21,30 @@ import (
 	"github.com/mstone/focus/store"
 )
 
-var driver = flag.String("driver", "sqlite3", "database/sql driver")
-var dsn = flag.String("dsn", ":memory:", "database/sql dsn")
-var api = flag.String("api", "ws://localhost:3000/ws", "API endpoint")
-var assets = flag.String("assets", defaultAssetPath(), "assets directory")
-var logPath = flag.String("log", "./focus.log", "log path")
-
-func defaultAssetPath() string {
-	p, err := build.Default.Import("github.com/mstone/focus", "", build.FindOnly)
-	if err != nil {
-		return "."
-	}
-	return p.Dir
-}
+//go:generate gopherjs build github.com/mstone/focus/client -m -o public/client.js
+//go:generate esc -o assets.go -pkg=main -prefix=public/ public/client.js public/ace-builds/src-min-noconflict/
+//go:generate go-bindata -o bindata.go -prefix=templates/ templates/
 
 func main() {
+	driver := ""
+	dsn := ""
+	api := ""
+	bind := ""
+	logPath := ""
+	local := false
+
+	flag.StringVar(&driver, "driver", "sqlite3", "database/sql driver")
+	flag.StringVar(&dsn, "dsn", ":memory:", "database/sql dsn")
+	flag.StringVar(&api, "api", "ws://localhost:3000/ws", "API endpoint")
+	flag.StringVar(&bind, "bind", "localhost:3000", "ip:port to bind")
+	flag.StringVar(&logPath, "log", "./focus.log", "log path")
+	flag.BoolVar(&local, "local", false, "use local assets?")
+
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
 	flag.Parse()
 
-	fh := log.Must.FileHandler(*logPath, log.LogfmtFormat())
+	fh := log.Must.FileHandler(logPath, log.LogfmtFormat())
 	// h := log.CallerStackHandler("%v",
 	h := log.CallerFileHandler(
 		log.MultiHandler(
@@ -65,9 +67,9 @@ func main() {
 
 	log.Info("focus", "boot", true)
 
-	db, err := sql.Open(*driver, *dsn)
+	db, err := sql.Open(driver, dsn)
 	if err != nil {
-		log.Crit("unable to open driver", "driver", *driver, "dsn", *dsn, "err", err)
+		log.Crit("unable to open driver", "driver", driver, "dsn", dsn, "err", err)
 		return
 	}
 
@@ -84,9 +86,10 @@ func main() {
 	}
 
 	serverCfg := server.Config{
-		Store:  store,
-		API:    *api,
-		Assets: *assets,
+		Store:     store,
+		API:       api,
+		Assets:    FS(local),
+		Templates: Asset,
 	}
 
 	otServer, err := otserver.New()
@@ -101,14 +104,8 @@ func main() {
 		return
 	}
 
-	apiUrl, err := url.Parse(*api)
-	if err != nil {
-		log.Crit("unable to parse API URL", "err", err)
-		return
-	}
-
-	log.Info("focus server starting", "host", apiUrl.Host)
-	err = http.ListenAndServe(apiUrl.Host, server)
+	log.Info("focus server starting", "bind", bind, "api", api)
+	err = http.ListenAndServe(bind, server)
 	if err != nil {
 		log.Crit("unable to run server", "err", err)
 		return

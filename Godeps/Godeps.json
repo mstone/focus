@@ -6,9 +6,28 @@
 	],
 	"Deps": [
 		{
+			"ImportPath": "github.com/arschles/go-bindata-html-template",
+			"Rev": "565f7dc68c0e691d7a0e189e163e1d77411555fe"
+		},
+		{
 			"ImportPath": "github.com/codegangsta/negroni",
 			"Comment": "v0.1-55-g1dd3ab0",
 			"Rev": "1dd3ab0ff59e13f5b73dcbf70703710aebe50d2f"
+		},
+		{
+			"ImportPath": "github.com/gopherjs/gopherjs/build",
+			"Comment": "ZZZ-443-g702c1e9",
+			"Rev": "702c1e951ed2afd9927be4768e089c03f722a9af"
+		},
+		{
+			"ImportPath": "github.com/gopherjs/gopherjs/compiler",
+			"Comment": "ZZZ-443-g702c1e9",
+			"Rev": "702c1e951ed2afd9927be4768e089c03f722a9af"
+		},
+		{
+			"ImportPath": "github.com/gopherjs/gopherjs/gcexporter",
+			"Comment": "ZZZ-443-g702c1e9",
+			"Rev": "702c1e951ed2afd9927be4768e089c03f722a9af"
 		},
 		{
 			"ImportPath": "github.com/gopherjs/gopherjs/js",
@@ -18,6 +37,10 @@
 		{
 			"ImportPath": "github.com/gorilla/websocket",
 			"Rev": "87f6f6a22ebfbc3f89b9ccdc7fddd1b914c095f9"
+		},
+		{
+			"ImportPath": "github.com/kardianos/osext",
+			"Rev": "ccfcd0245381f0c94c68f50626665eed3c6b726a"
 		},
 		{
 			"ImportPath": "github.com/kr/logfmt",
@@ -32,8 +55,41 @@
 			"Rev": "ea3ab4d8f5eba6a26173197b7c612fb1c0d0a081"
 		},
 		{
-			"ImportPath": "github.com/unrolled/render",
-			"Rev": "bdfac4a8df10cc9dc03ee14ba2f655137fd70378"
+			"ImportPath": "github.com/neelance/sourcemap",
+			"Rev": "8994456d80d26c100207bb0c4a758e25b1b4b5db"
+		},
+		{
+			"ImportPath": "github.com/spf13/cobra",
+			"Rev": "f8e1ec56bdd7494d309c69681267859a6bfb7549"
+		},
+		{
+			"ImportPath": "github.com/spf13/pflag",
+			"Rev": "370c3171201099fa6b466db45c8a032cbce33d8d"
+		},
+		{
+			"ImportPath": "golang.org/x/crypto/ssh/terminal",
+			"Rev": "1351f936d976c60a0a48d728281922cf63eafb8d"
+		},
+		{
+			"ImportPath": "golang.org/x/tools/go/ast/astutil",
+			"Rev": "4744be3abc70249546ce31c32fa9b5a5e96b5ad1"
+		},
+		{
+			"ImportPath": "golang.org/x/tools/go/exact",
+			"Rev": "4744be3abc70249546ce31c32fa9b5a5e96b5ad1"
+		},
+		{
+			"ImportPath": "golang.org/x/tools/go/gcimporter",
+			"Rev": "4744be3abc70249546ce31c32fa9b5a5e96b5ad1"
+		},
+		{
+			"ImportPath": "golang.org/x/tools/go/types",
+			"Rev": "4744be3abc70249546ce31c32fa9b5a5e96b5ad1"
+		},
+		{
+			"ImportPath": "gopkg.in/fsnotify.v1",
+			"Comment": "v1.2.0",
+			"Rev": "96c060f6a6b7e0d6f75fddd10efeaca3e5d1bcb0"
 		},
 		{
 			"ImportPath": "gopkg.in/inconshreveable/log15.v2",

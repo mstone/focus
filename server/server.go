@@ -5,11 +5,9 @@
 package server
 
 import (
+	"github.com/arschles/go-bindata-html-template"
 	"net/http"
-	"path"
 	"time"
-
-	"github.com/unrolled/render"
 
 	log "gopkg.in/inconshreveable/log15.v2"
 
@@ -37,27 +35,30 @@ func (w WSConn) CancelWriteTimeout() error {
 }
 
 type Config struct {
-	API    string
-	Assets string
-	Store  *store.Store
+	API       string
+	Assets    http.FileSystem
+	Store     *store.Store
+	Templates func(path string) ([]byte, error)
 }
 
 type Server struct {
-	m      *negroni.Negroni
-	l      log.Logger
-	s      *server.Server
-	store  *store.Store
-	api    string
-	assets string
+	m         *negroni.Negroni
+	l         log.Logger
+	s         *server.Server
+	store     *store.Store
+	api       string
+	assets    http.FileSystem
+	templates func(path string) ([]byte, error)
 }
 
 func New(c Config, is *server.Server) (*Server, error) {
 	s := &Server{
-		l:      log.Root(),
-		s:      is,
-		store:  c.Store,
-		api:    c.API,
-		assets: c.Assets,
+		l:         log.Root(),
+		s:         is,
+		store:     c.Store,
+		api:       c.API,
+		assets:    c.Assets,
+		templates: c.Templates,
 	}
 
 	err := s.configure()
@@ -76,6 +77,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (s *Server) configure() error {
 	m := negroni.New()
 	m.Use(negroni.HandlerFunc(func(w http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
+		log.Info("http request", "req", r)
 		next(w, r)
 	}))
 	m.Use(negroni.HandlerFunc(func(w http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
@@ -87,11 +89,7 @@ func (s *Server) configure() error {
 		}()
 		next(w, r)
 	}))
-	m.Use(negroni.NewStatic(http.Dir(path.Join(s.assets, "public"))))
-
-	x := render.New(render.Options{
-		Directory: path.Join(s.assets, "templates"),
-	})
+	m.Use(negroni.NewStatic(s.assets))
 
 	mux := http.NewServeMux()
 
@@ -117,13 +115,16 @@ func (s *Server) configure() error {
 	})
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		tmpl := template.Must(template.New("root.tmpl", s.templates).Parse("root.tmpl"))
 		v := struct {
 			API, Name string
 		}{
 			API:  s.api,
 			Name: r.URL.Path,
 		}
-		x.HTML(w, 200, "root", v)
+		w.Header().Set("Content-Type", "text/html")
+		w.WriteHeader(200)
+		tmpl.Execute(w, v)
 	})
 
 	m.UseHandler(mux)

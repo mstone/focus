@@ -28,9 +28,7 @@ focus:
       * [mattn/go-colorable](https://github.com/mattn/go-colorable),
       * [gopherjs](https://github.com/gopherjs/gopherjs),
       * [codegangsta/negroni](https://github.com/codegangsta/negroni),
-      * [unrolled/render](https://github.com/unrolled/render),
       * [gorilla/websocket](https://github.com/gorilla/websocket),
-      * [gofuzz](https://github.com/google/gofuzz),
 
   * bundles:
 
@@ -42,72 +40,32 @@ Here are some hints to help get you started running a local dev instance of focu
 
 ```bash
 export GOPATH=$HOME/go
+export PATH=$GOPATH/bin:$PATH
 mkdir -p $GOPATH/{pkg,src,bin}
 
-export PATH=$GOPATH/bin:$PATH
-
 go get -u github.com/tools/godep
-
-go get -d github.com/mstone/gopherjs
-cd $GOPATH/src/github.com/mstone/gopherjs
-godep go install
+go get -u github.com/jteeuwen/go-bindata
+go get -u github.com/mjibson/esc
 
 go get -d github.com/mstone/focus
 cd $GOPATH/src/github.com/mstone/focus
+
 git submodule init
 git submodule update
+(cd public/gopherjs; godep go install)
+
 godep restore
-./run.sh
+go generate
+go build -i
+go build
 ```
 
-and here's a step-by-step explanation of these instructions:
+Also, for deployment, you might try adapting something like
 
-1. focus is written in go and go expects you to set a special environment
-variable, named `GOPATH`, to point to a special directory structure intended
-for storing source code, intermediate compilation results, and compiled
-binaries:
+```
+make
+docker build .
+docker run -v $(pwd)/focus.log:/focus.log -p 127.0.0.1:3000:3000 $IMG "-api=ws://127.0.0.1:3000/" "-bind=0.0.0.0:3000"
+```
 
-    ```bash
-    export GOPATH=$HOME/go
-    mkdir -p $GOPATH/{pkg,src,bin}
-    ```
-
-2. focus build-depends on some other programs written in go, notably
-[godep](https://github.com/tools/godep) and
-[gopherjs](https://github.com/gopherjs/gopherjs). Therefore, we add the
-`$GOPATH/bin` folder to our `PATH` environment variable:
-
-    ```bash
-    export PATH=$GOPATH/bin:$PATH
-    ```
-
-3. gopherjs and focus are still under active development so, for now, we
-recommend using [godep](https://github.com/tools/godep) to stay in sync with
-our versions of the relevant build-deps:
-
-    ```bash
-    go get -u github.com/tools/godep
-    ```
-
-4. which we use to build gopherjs, as in:
-
-    ```bash
-    go get -d github.com/mstone/gopherjs
-    cd $GOPATH/src/github.com/mstone/gopherjs
-    godep go install
-    ```
-
-5. finally, focus uses some existing javascript libraries like
-[ACE](http://ace.c9.io), which we currently include via a [git
-submodule](http://git-scm.com/docs/git-submodule), which [go
-get](http://golang.org/cmd/go/#hdr-Download_and_install_packages_and_dependencies)
-does not automatically check out:
-
-    ```bash
-    go get -d github.com/mstone/focus
-    cd $GOPATH/src/github.com/mstone/focus
-    git submodule init
-    git submodule update
-    godep restore
-    ./run.sh
-    ```
+to suit your network settings (or you might otherwise enjoy the resulting statically linked executable.)
