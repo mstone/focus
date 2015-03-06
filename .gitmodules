@@ -1,3 +1,6 @@
 [submodule "public/ace-builds"]
 	path = public/ace-builds
 	url = https://github.com/ajaxorg/ace-builds/
+[submodule "public/gopherjs"]
+	path = public/gopherjs
+	url = git://github.com/mstone/gopherjs
