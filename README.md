@@ -18,7 +18,7 @@ focus:
 
   * build-depends on
 
-      * [Golang](http://golang.org),
+      * [Golang 1.4](http://golang.org),
       * [sqlite3](http://sqlite.org),
 
     and several MIT-, 3BSD- and Apache 2.0-licensed Golang libraries including
@@ -44,7 +44,7 @@ export PATH=$GOPATH/bin:$PATH
 mkdir -p $GOPATH/{pkg,src,bin}
 
 go get -u github.com/tools/godep
-go get -u github.com/jteeuwen/go-bindata
+go get -u github.com/jteeuwen/go-bindata/...
 go get -u github.com/mjibson/esc
 
 go get -d github.com/mstone/focus
