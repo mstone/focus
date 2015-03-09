@@ -1,0 +1,47 @@
+= focus(1)
+Michael Stone <mistone@akamai.com>
+v0.1, 2015-03-08
+:toc:
+:homepage: http://github.com/mstone/focus
+:numbered:
+:sectlinks:
+:icons: font
+
+ifdef::env-github[:outfilesuffix: .adoc]
+
+== NAME
+
+focus - an experimental collaboration platform
+
+== SYNOPSIS
+
+[verse]
+focus [-h] [-api=<url>] [-bind=<ip>:<port>] [-driver=<driver>]
+    [-dsn=<dsn>] [-local=<bool>] [-log=<path>]
+
+== DESCRIPTION
+
+focus is a pre-alpha quality https://etherpad.org[Etherpad] clone.
+
+== OPTIONS
+
+-h::
+	Prints online help, including current default values of arguments.
+
+-api=<api>::
+	Tells focus to direct JS clients to use '<api>' as their <<intent#CL-3,VPP service locator>>.
+
+-bind=<ip>:<port>::
+	Tells focus to bind to '<ip>' on port '<port>'.
+
+-driver=<driver>::
+	Tells focus to store data via '<driver>'. Currently, '<driver>' should be 'sqlite'.
+
+-dsn=<dsn>::
+	Tells focus to store data in data source '<dsn>'. Correct values of '<dsn>' are '<driver>'-specific. For '-driver=sqlite', '<dsn>' should be a path to a writable file.
+
+-local=<bool>::
+	If 'true', tells focus to serve some resources from local files rather than from copies embedded in the 'focus' binary.
+
+-log=<path>::
+	Tells focus where to save log records.

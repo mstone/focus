@@ -385,18 +385,18 @@ The server host environment may have any combination of a process supervisor, a 
                Editor                               Operator
                  |                                     |
                  |                                     |
-            Focus Client                               |
-       /---------------------\                         |
-       |  conns     widgets  |                         |
-       |  fds                |                         |
-       |  revs      ot state |                         |
+            Focus Client                       Focus VPP Server
+       /---------------------\                /-----------------\
+       |  conns              |                |      docs       |
+       |  fds       adapters |                |      conns      |
+       |  editors   ot state |                \-----------------/
        \---------------------/                         |
                  |                                     |
                  |                                     |
-              Browser                             Focus Server
+              Browser                          Focus HTTP+WS Server
        /---------------------\                /-----------------\
-       | DOM      WebSockets |                | conns     docs  |
-       | JS       Editor Lib |                |      descs      |
+       | DOM      WebSockets |                | websockets      |
+       | JS       Editor Lib |                | resources       |
        \---------------------/                \-----------------/
                  |                                     |
                  |                                     |

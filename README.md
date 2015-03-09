@@ -10,33 +10,11 @@ low-latency collaborative editor inspired by and derived from
 ## Caveats
 
 Warning: focus is not yet feature-complete and has [known
-issues](https://github.com/mstone/focus/issues).
-
-## Dependencies
-
-focus:
-
-  * build-depends on
-
-      * [Golang 1.4](http://golang.org),
-      * [sqlite3](http://sqlite.org),
-
-    and several MIT-, 3BSD- and Apache 2.0-licensed Golang libraries including
-
-      * [gopkg.in/inconshreveable/log15.v2](https://gopkg.in/inconshreveable/log15.v2),
-      * [mattn/go-sqlite3](https://github.com/mattn/go-sqlite3),
-      * [mattn/go-colorable](https://github.com/mattn/go-colorable),
-      * [gopherjs](https://github.com/gopherjs/gopherjs),
-      * [codegangsta/negroni](https://github.com/codegangsta/negroni),
-      * [gorilla/websocket](https://github.com/gorilla/websocket),
-
-  * bundles:
-
-      * [ACE](http://ace.c9.io)
+issues](https://github.com/mstone/focus/issues) that make it pre-alpha quality.
 
 ## Use
 
-Here are some hints to help get you started running a local dev instance of focus:
+For the brave, here are some hints to help get you started running a local dev instance of focus:
 
 ```bash
 export GOPATH=$HOME/go
@@ -60,12 +38,17 @@ go build -i
 go build
 ```
 
-Also, for deployment, you might try adapting something like
+Then, when you're ready to think about deployment, use:
 
 ```
 make
-docker build .
-docker run -v $(pwd)/focus.log:/focus.log -p 127.0.0.1:3000:3000 $IMG "-api=ws://127.0.0.1:3000/" "-bind=0.0.0.0:3000"
 ```
 
-to suit your network settings (or you might otherwise enjoy the resulting statically linked executable.)
+to produce a statically linked executable.
+
+Finally, to use Docker to pack the resulting executable together with any resources necessary for deployment, try adapting something like the following to suit your network configuration:
+
+```
+docker build .
+docker run -v $(pwd)/focus.log:/focus.log -p 127.0.0.1:3000:3000 $IMG "-api=ws://my.site:3000/" "-bind=0.0.0.0:3000"
+```
