@@ -28,6 +28,7 @@ func main() {
 	// configure ACE + attach adapter
 	aceDiv = js.Global.Get("document").Call("getElementById", "editor")
 	aceObj = js.Global.Get("ace")
+
 	editor = aceObj.Call("edit", "editor")
 	editor.Call("setTheme", "ace/theme/chrome")
 
@@ -41,8 +42,10 @@ func main() {
 	doc = editor.Call("getSession").Call("getDocument")
 	doc.Call("setNewLineMode", "unix")
 
+	sessionLengther := ace.NewSessionLengther(session)
+
 	adapter = ace.NewAdapter()
-	adapter.AttachEditor(session, doc)
+	adapter.AttachEditor(sessionLengther, ace.NewJSDocument(doc))
 
 	// configure socket
 	apiEndPoint := aceDiv.Get("dataset").Get("vppApi")
@@ -85,5 +88,7 @@ func main() {
 		}
 	})
 
-	adapter.AttachSocket(state, conn)
+	connSender := ace.NewSocketSender(conn)
+
+	adapter.AttachSocket(state, connSender)
 }

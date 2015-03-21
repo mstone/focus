@@ -6,7 +6,7 @@ package document
 import (
 	im "github.com/mstone/focus/internal/msgs"
 	"github.com/mstone/focus/ot"
-	"gopkg.in/inconshreveable/log15.v2"
+	// "gopkg.in/inconshreveable/log15.v2"
 )
 
 // struct doc represents a vaporpad (like a file)
@@ -73,7 +73,7 @@ func (d *doc) readLoop() {
 			}
 		case im.Write:
 			rev, ops := d.transform(v.Rev, v.Ops.Clone())
-			log15.Info("recv", "obj", "doc", "rev", v.Rev, "hash", v.Hash, "ops", v.Ops, "docrev", len(d.hist), "dochist", d.Body(), "nrev", rev, "tops", ops)
+			// log15.Info("recv", "obj", "doc", "rev", v.Rev, "hash", v.Hash, "ops", v.Ops, "docrev", len(d.hist), "dochist", d.Body(), "nrev", rev, "tops", ops)
 			d.broadcast(v.Conn, rev, ops)
 		}
 	}

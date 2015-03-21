@@ -31,6 +31,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 	"unicode/utf8"
 
 	"github.com/gopherjs/gopherjs/js"
@@ -40,83 +41,28 @@ import (
 	"github.com/mstone/focus/ot"
 )
 
-type Range struct {
-	doc       *js.Object
-	textRange *js.Object
+type Lengther interface {
+	Length() int
 }
 
-func NewRange(doc *js.Object, textRange *js.Object) *Range {
-	return &Range{
-		doc:       doc,
-		textRange: textRange,
-	}
-}
-
-func (r *Range) asLinearIndex(pos *js.Object) int {
-	// add the lengths of the lines before startRow, plus
-	// startCol, plus 1 * startRow for the line delimiters
-	row := pos.Get("row").Int()
-	col := pos.Get("column").Int()
-
-	linesBefore := r.doc.Call("getLines", 0, row-1)
-	// alert.JSON(linesBefore)
-
-	idx := col + row
-	for i := 0; i < linesBefore.Length(); i++ {
-		idx += linesBefore.Index(i).Get("length").Int()
-	}
-	return idx
-}
-
-func (r *Range) Start() int {
-	start := r.textRange.Get("start")
-	return r.asLinearIndex(start)
-}
-
-func (r *Range) End() int {
-	end := r.textRange.Get("end")
-	return r.asLinearIndex(end)
-}
-
-func RowCol(doc *js.Object, pos int) *js.Object {
-	var row, col int
-	lines := doc.Call("getAllLines")
-	// alert.String("lines")
-	// alert.JSON(lines)
-	for i := 0; i < lines.Length(); i++ {
-		lineLen := lines.Index(i).Length()
-		if pos <= lineLen {
-			row = i
-			col = pos
-			break
-		} else {
-			pos -= lineLen + 1
-		}
-	}
-	obj := js.Global.Get("Object").New()
-	obj.Set("row", row)
-	obj.Set("column", col)
-	return obj
-}
-
-func StartEnd(doc *js.Object, start, end int) *js.Object {
-	ret := js.Global.Get("Object").New()
-	ret.Set("start", RowCol(doc, start))
-	ret.Set("end", RowCol(doc, end))
-	return ret
+type Sender interface {
+	Send(msg []byte)
 }
 
 type Adapter struct {
-	conn     *js.Object
-	session  *js.Object
-	doc      *js.Object
+	mu       sync.Mutex
+	conn     Sender
+	session  Lengther
+	doc      Document
 	state    *ot.Controller
 	suppress bool
 	fd       int
 }
 
 func NewAdapter() *Adapter {
-	return &Adapter{}
+	return &Adapter{
+		mu: sync.Mutex{},
+	}
 }
 
 func (a *Adapter) Suppress(suppress bool) {
@@ -137,13 +83,14 @@ func (a *Adapter) Send(rev int, hash string, ops ot.Ops) {
 			Ops:  ops,
 		})
 		alert.Golang(fmt.Sprintf("sending jsops: %s", jsOps))
-		go func() {
-			a.conn.Call("send", jsOps)
-		}()
+		a.conn.Send(jsOps)
 	}
 }
 
 func (a *Adapter) Recv(ops ot.Ops) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
 	pos := 0
 	alert.String(fmt.Sprintf("recv(%s)", ops.String()))
 
@@ -162,15 +109,15 @@ func (a *Adapter) Recv(ops ot.Ops) {
 			pos += op.Size
 			continue
 		case op.IsInsert():
-			rowcol := RowCol(a.doc, pos)
+			rowcol := NewRowCol(a.doc, pos)
 			alert.String(fmt.Sprintf("insert(%d, %q)", pos, ot.AsString(op.Body)))
-			alert.JSON(rowcol)
-			a.doc.Call("insert", rowcol, ot.AsString(op.Body))
+			// alert.JSON(rowcol)
+			a.doc.Insert(rowcol, ot.AsString(op.Body))
 			continue
 		case op.IsDelete():
-			startEnd := StartEnd(a.doc, pos, pos-op.Size)
+			startEnd := NewStartEnd(a.doc, pos, pos-op.Size)
 			alert.String(fmt.Sprintf("remove(%d, %d)", pos, pos-op.Size))
-			a.doc.Call("remove", startEnd)
+			a.doc.Remove(startEnd)
 		}
 	}
 }
@@ -179,30 +126,44 @@ func (a *Adapter) AttachFd(fd int) {
 	a.fd = fd
 }
 
-func (a *Adapter) AttachEditor(session *js.Object, doc *js.Object) {
+func (a *Adapter) AttachEditor(session Lengther, doc Document) {
 	a.session = session
 	a.doc = doc
-	doc.Call("on", "change", a.OnChange)
+	doc.SetOnChange(a.OnChange)
 }
 
-func (a *Adapter) AttachSocket(state *ot.Controller, conn *js.Object) {
+func (a *Adapter) AttachSocket(state *ot.Controller, conn Sender) {
 	a.state = state
 	a.conn = conn
 }
+
+// RowCall(...)
+//   -> getAllLines() -> Array[Line]
+// StartEnd(...)
+//   -> RowCol
+// NewRange(...)
+//   -> getLines(a, b)  -> Array[Line]  (.Get("length").Int())
+// On("change")
+// Insert()
+// Remove()
 
 func (a *Adapter) OnChange(change *js.Object) bool {
 	if a.IsSuppressed() {
 		alert.String("change SUPPRESSED")
 		return true
 	}
-	length := a.session.Call("getValue").Length()
+
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	length := a.session.Length()
 	alert.String(fmt.Sprintf("session len: %d", length))
 
 	data := change.Get("data")
 	alert.JSON(data)
 
 	action := data.Get("action").String()
-	textRange := NewRange(a.doc, data.Get("range"))
+	textRange := NewRange(a.doc, NewJSStartEnd(data.Get("range")))
 
 	start := textRange.Start()
 	end := textRange.End()

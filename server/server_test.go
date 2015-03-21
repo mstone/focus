@@ -29,7 +29,7 @@ func newTestServer(t *testing.T) (*httptest.Server, *Server) {
 	focusConf := Config{
 		Store:  nil,
 		API:    "",
-		Assets: pkg.Dir,
+		Assets: http.Dir(pkg.Dir),
 	}
 	log.Info("test found assets path", "assets", focusConf.Assets)
 

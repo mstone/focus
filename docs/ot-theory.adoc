@@ -1,0 +1,21 @@
+= Operational Transform Theory in Focus
+Michael Stone <mistone@akamai.com>
+v0.1, 2015-03-20
+:toc:
+:homepage: http://github.com/mstone/focus
+:numbered:
+:sectlinks:
+:icons: font
+
+== Introduction
+
+Per ↑<<intent#PR-3>>, focus is based on the theory of http://en.wikipedia.org/wiki/Operational_transformation[operational
+transformation] (OT), currently as formalized by http://timbaumann.info/[Tim Baumann] in https://github.com
+/Operational-Transformation/ot.v/blob/master/ListOperation.v[ot.v] and elucidated by http://www.codecommit.com/[Daniel Spiewak] in his essay http://www.codecommit.com/blog/java/understanding-and-applying-operational-transformation["Understanding and Applying Operational Transformation"].
+
+== Idea
+
+
+The setting for OT is a category whose objects are strings and whose arrows represent edits to strings as particular sequences of simpler terms that represent instructions to a simple automaton to insert, delete, and retain characters taken from the source string.
+
+

@@ -4,20 +4,20 @@
 package alert
 
 import (
-	"fmt"
+	// "fmt"
 	"github.com/gopherjs/gopherjs/js"
 )
 
 func Golang(s interface{}) {
-	js.Global.Get("console").Call("log", fmt.Sprintf("%+v", s))
+	// js.Global.Get("console").Call("log", fmt.Sprintf("%+v", s))
 }
 
 func String(s string) {
-	js.Global.Get("console").Call("log", s)
+	// js.Global.Get("console").Call("log", s)
 }
 
 func JSON(o *js.Object) {
-	s := o.String()
+	// s := o.String()
 	//js.Global.Get("JSON").Call("stringify", o).String()
-	js.Global.Get("console").Call("log", s)
+	// js.Global.Get("console").Call("log", s)
 }
