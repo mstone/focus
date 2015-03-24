@@ -113,6 +113,7 @@ func (a *Adapter) Recv(ops ot.Ops) {
 			alert.String(fmt.Sprintf("insert(%d, %q)", pos, ot.AsString(op.Body)))
 			// alert.JSON(rowcol)
 			a.doc.Insert(rowcol, ot.AsString(op.Body))
+			pos += op.Len()
 			continue
 		case op.IsDelete():
 			startEnd := NewStartEnd(a.doc, pos, pos-op.Size)
@@ -176,9 +177,13 @@ func (a *Adapter) OnChange(change *js.Object) bool {
 		alert.String(fmt.Sprintf("newInsert(%d, %d, %q)", oldLen, start, str))
 		ops = ot.NewInsert(oldLen, start, str)
 	case "removeText":
-		oldLen := length + (end - start)
-		alert.String(fmt.Sprintf("newDelete(%d, %d, %d)", oldLen, start, end-start))
-		ops = ot.NewDelete(oldLen, start, end-start)
+		// BUG(mistone): end is bogus after delete when \n in text...
+		// Repro: abc\ndef<<<^H
+		text := data.Get("text").String()
+		textLen := len(text)
+		oldLen := length + textLen
+		alert.String(fmt.Sprintf("newDelete(%d, %d, %d)", oldLen, start, textLen))
+		ops = ot.NewDelete(oldLen, start, textLen)
 	case "insertLines":
 		linesObj := data.Get("lines")
 		numLines := linesObj.Length()
