@@ -11,9 +11,7 @@ ifdef::env-github[:outfilesuffix: .adoc]
 
 == Introduction
 
-Per ↑<<intent#PR-3>>, focus is based on the theory of http://en.wikipedia.org/wiki/Operational_transformation[operational
-transformation] (OT), currently as formalized by http://timbaumann.info/[Tim Baumann] in https://github.com
-/Operational-Transformation/ot.v/blob/master/ListOperation.v[ot.v] and elucidated by http://www.codecommit.com/[Daniel Spiewak] in his essay http://www.codecommit.com/blog/java/understanding-and-applying-operational-transformation["Understanding and Applying Operational Transformation"].
+Per ↑<<intent#PR-3,PR-3: Operational Transformation Theory>>, focus is based on the theory of http://en.wikipedia.org/wiki/Operational_transformation[operational transformation] (OT), currently as formalized by http://timbaumann.info/[Tim Baumann] in https://github.com/Operational-Transformation/ot.v/blob/master/ListOperation.v[ot.v] and elucidated by http://www.codecommit.com/[Daniel Spiewak] in his essay http://www.codecommit.com/blog/java/understanding-and-applying-operational-transformation["Understanding and Applying Operational Transformation"].
 
 == Idea
 
