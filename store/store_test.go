@@ -4,15 +4,15 @@
 package store
 
 import (
-	"database/sql"
 	"testing"
 
+	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3"
 	log "gopkg.in/inconshreveable/log15.v2"
 )
 
 func mkTestStore(t *testing.T) *Store {
-	db, err := sql.Open("sqlite3", "../fizzle.db")
+	db, err := sqlx.Open("sqlite3", ":memory:")
 	if err != nil {
 		t.Fatalf("unable to open test db, err: %q", err)
 	}

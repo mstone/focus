@@ -217,7 +217,7 @@ Loop:
 
 func testOnce(t *testing.T) {
 	log.Crit("boot")
-	focusSrv, err := New()
+	focusSrv, err := New(nil)
 	if err != nil {
 		t.Fatalf("err: %s ", err)
 	}

@@ -5,30 +5,46 @@
 package store
 
 import (
-	"database/sql"
 	"fmt"
 	"runtime/debug"
 
+	"github.com/jmoiron/sqlx"
 	log "gopkg.in/inconshreveable/log15.v2"
 )
 
 type Config struct {
-	DB *sql.DB
+	DB *sqlx.DB
 }
 
 type Store struct {
-	db *sql.DB
+	msgs chan interface{}
+	db   *sqlx.DB
 }
 
 func New(config Config) *Store {
-	return &Store{
-		db: config.DB,
+	st := &Store{
+		msgs: make(chan interface{}),
+		db:   config.DB,
+	}
+	go st.readLoop()
+	return st
+}
+
+func (st *Store) Msgs() chan interface{} {
+	return st.msgs
+}
+
+func (st *Store) readLoop() {
+	for m := range st.msgs {
+		switch m.(type) {
+		default:
+		}
 	}
 }
 
 // adapted from http://stackoverflow.com/questions/16184238/database-sql-tx-detecting-commit-or-rollback
-func transact(db *sql.DB, txFunc func(*sql.Tx) error) (err error) {
-	tx, err := db.Begin()
+func transact(db *sqlx.DB, txFunc func(*sqlx.Tx) error) (err error) {
+	tx, err := db.Beginx()
 	if err != nil {
 		log.Error("unable to begin txn", "err", err)
 		return
@@ -37,10 +53,10 @@ func transact(db *sql.DB, txFunc func(*sql.Tx) error) (err error) {
 		if p := recover(); p != nil {
 			switch p := p.(type) {
 			case error:
-				log.Error("txn panic", "err", p, "debugstack", debug.Stack())
+				log.Error("txn panic", "err", p, "debugstack", string(debug.Stack()))
 				err = p
 			default:
-				log.Error("txn panic", "err", p, "debugstack", debug.Stack())
+				log.Error("txn panic", "err", p, "debugstack", string(debug.Stack()))
 				err = fmt.Errorf("%s", p)
 			}
 		}
@@ -50,7 +66,7 @@ func transact(db *sql.DB, txFunc func(*sql.Tx) error) (err error) {
 		}
 		err = tx.Commit()
 		if err != nil {
-			log.Error("txn err on commit", "err", err, "debugstack", debug.Stack())
+			log.Error("txn err on commit", "err", err, "debugstack", string(debug.Stack()))
 			tx.Rollback()
 			return
 		}
@@ -58,8 +74,8 @@ func transact(db *sql.DB, txFunc func(*sql.Tx) error) (err error) {
 	return txFunc(tx)
 }
 
-func transact2(db *sql.DB, txFunc func(*sql.Tx) (interface{}, error)) (ret interface{}, err error) {
-	tx, err := db.Begin()
+func transact2(db *sqlx.DB, txFunc func(*sqlx.Tx) (interface{}, error)) (ret interface{}, err error) {
+	tx, err := db.Beginx()
 	if err != nil {
 		log.Error("unable to begin txn", "err", err)
 		return
@@ -68,10 +84,10 @@ func transact2(db *sql.DB, txFunc func(*sql.Tx) (interface{}, error)) (ret inter
 		if p := recover(); p != nil {
 			switch p := p.(type) {
 			case error:
-				log.Error("txn panic", "err", p, "debugstack", debug.Stack())
+				log.Error("txn panic", "err", p, "debugstack", string(debug.Stack()))
 				err = p
 			default:
-				log.Error("txn panic", "err", p, "debugstack", debug.Stack())
+				log.Error("txn panic", "err", p, "debugstack", string(debug.Stack()))
 				err = fmt.Errorf("%s", p)
 			}
 		}
@@ -81,7 +97,7 @@ func transact2(db *sql.DB, txFunc func(*sql.Tx) (interface{}, error)) (ret inter
 		}
 		err = tx.Commit()
 		if err != nil {
-			log.Error("txn err on commit", "err", err, "debugstack", debug.Stack())
+			log.Error("txn err on commit", "err", err, "debugstack", string(debug.Stack()))
 			tx.Rollback()
 			return
 		}
@@ -91,7 +107,50 @@ func transact2(db *sql.DB, txFunc func(*sql.Tx) (interface{}, error)) (ret inter
 
 // Reset initializes the Store's db tables.
 func (s *Store) Reset() error {
-	return transact(s.db, func(tx *sql.Tx) error {
-		return nil
+	userVersionBox, err := transact2(s.db, func(tx *sqlx.Tx) (interface{}, error) {
+		var userVersion int
+		row := tx.QueryRow("PRAGMA user_version")
+		err := row.Scan(&userVersion)
+		if err != nil {
+			log.Error("unable to scan user_version", "err", err)
+			return 0, err
+		}
+		return userVersion, nil
 	})
+	if err != nil {
+		return err
+	}
+	userVersion := userVersionBox.(int)
+
+	log.Info("store found user_version", "user_version", userVersion)
+
+	if userVersion < 1 {
+		log.Info("store applying migration 1")
+		transact(s.db, func(tx *sqlx.Tx) error {
+			tx.MustExec(`CREATE TABLE IF NOT EXISTS document (
+				id INTEGER PRIMARY KEY,
+				name TEXT
+				)`)
+			tx.MustExec(`CREATE TABLE IF NOT EXISTS author (
+				id INTEGER PRIMARY KEY,
+				name TEXT,
+				email TEXT
+				)`)
+			tx.MustExec(`CREATE TABLE IF NOT EXISTS operation (
+				id INTEGER PRIMARY KEY,
+				document_id INTEGER,
+				author_id INTEGER,
+				revision_number INTEGER,
+				body TEXT,
+				FOREIGN KEY (document_id) REFERENCES document(id),
+				FOREIGN KEY (author_id) REFERENCES author(id)
+				)`)
+			tx.MustExec(`
+				PRAGMA user_version = 1;
+				`)
+			return nil
+		})
+		log.Info("store finished migration 1")
+	}
+	return nil
 }

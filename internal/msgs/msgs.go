@@ -40,6 +40,17 @@ type Allocdocresp struct {
 	Doc chan interface{}
 }
 
+// processed by store for doc
+type Storedoc struct {
+	Reply chan Allocdocresp
+	Name  string
+}
+
+type Storedocresp struct {
+	Err     error
+	StoreId int
+}
+
 // processed by doc for conn
 type Open struct {
 	Conn chan interface{}

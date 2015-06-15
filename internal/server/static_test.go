@@ -34,7 +34,7 @@ func (c *cl) Recv(ops ot.Ops) {
 }
 
 func TestStatic(t *testing.T) {
-	srv, _ := New()
+	srv, _ := New(nil)
 
 	cls := [4]cl{}
 

@@ -33,7 +33,7 @@ func newTestServer(t *testing.T) (*httptest.Server, *Server) {
 	}
 	log.Info("test found assets path", "assets", focusConf.Assets)
 
-	vppSrv, err := server.New()
+	vppSrv, err := server.New(nil)
 	if err != nil {
 		t.Errorf("error configuring INTERNAL focus test server; err: %q", err)
 	}

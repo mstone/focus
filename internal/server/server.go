@@ -12,12 +12,14 @@ import (
 type Server struct {
 	msgs  chan interface{}
 	names map[string]chan interface{}
+	store chan interface{}
 }
 
-func New() (*Server, error) {
+func New(store chan interface{}) (*Server, error) {
 	s := &Server{
 		msgs:  make(chan interface{}),
 		names: map[string]chan interface{}{},
+		store: store,
 	}
 	go s.readLoop()
 	return s, nil
@@ -29,7 +31,7 @@ func (s *Server) onAllocDoc(w chan im.Allocdocresp, name string) {
 
 	d, ok = s.names[name]
 	if !ok {
-		d = document.New(s.msgs, name)
+		d = document.New(s.msgs, s.store, name)
 		s.names[name] = d
 	}
 	w <- im.Allocdocresp{

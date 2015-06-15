@@ -5,7 +5,6 @@
 package main
 
 import (
-	"database/sql"
 	"flag"
 	"io"
 	"net/http"
@@ -13,6 +12,7 @@ import (
 	"runtime"
 	"runtime/debug"
 
+	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3"
 	log "gopkg.in/inconshreveable/log15.v2"
 
@@ -67,7 +67,7 @@ func main() {
 
 	log.Info("focus", "boot", true)
 
-	db, err := sql.Open(driver, dsn)
+	db, err := sqlx.Open(driver, dsn)
 	if err != nil {
 		log.Crit("unable to open driver", "driver", driver, "dsn", dsn, "err", err)
 		return
@@ -92,7 +92,7 @@ func main() {
 		Templates: Asset,
 	}
 
-	otServer, err := otserver.New()
+	otServer, err := otserver.New(store.Msgs())
 	if err != nil {
 		log.Crit("unable to configure ot-server", "err", err)
 		return

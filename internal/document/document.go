@@ -13,16 +13,18 @@ import (
 type doc struct {
 	msgs  chan interface{}
 	srvr  chan interface{}
+	store chan interface{}
 	name  string
 	conns map[chan interface{}]struct{}
 	hist  []ot.Ops
 	comp  ot.Ops
 }
 
-func New(srvr chan interface{}, name string) chan interface{} {
+func New(srvr chan interface{}, store chan interface{}, name string) chan interface{} {
 	d := &doc{
 		msgs:  make(chan interface{}),
 		srvr:  srvr,
+		store: store,
 		name:  name,
 		conns: map[chan interface{}]struct{}{},
 		hist:  []ot.Ops{},
@@ -103,7 +105,6 @@ func (d *doc) transform(rev int, clientOps ot.Ops) (int, ot.Ops) {
 	forServer := clientOps
 
 	// update history
-	// d.hist = append(d.hist, transformedOps)
 	d.hist = append(d.hist, forServer)
 
 	// update composed ops for new conns
