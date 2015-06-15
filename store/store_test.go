@@ -17,11 +17,7 @@ func mkTestStore(t *testing.T) *Store {
 		t.Fatalf("unable to open test db, err: %q", err)
 	}
 
-	conf := Config{
-		DB: db,
-	}
-
-	store := New(conf)
+	store := New(db)
 
 	err = store.Reset()
 	if err != nil {

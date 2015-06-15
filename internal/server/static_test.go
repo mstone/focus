@@ -1,11 +1,16 @@
 package server
 
 import (
+	"reflect"
+	"testing"
+
+	"github.com/jmoiron/sqlx"
+	log "gopkg.in/inconshreveable/log15.v2"
+
 	im "github.com/mstone/focus/internal/msgs"
 	"github.com/mstone/focus/msg"
 	"github.com/mstone/focus/ot"
-	"reflect"
-	"testing"
+	"github.com/mstone/focus/store"
 )
 
 type cl struct {
@@ -34,7 +39,23 @@ func (c *cl) Recv(ops ot.Ops) {
 }
 
 func TestStatic(t *testing.T) {
-	srv, _ := New(nil)
+	var err error
+
+	db, err := sqlx.Open("sqlite3", ":memory:")
+	if err != nil {
+		log.Crit("unable to open driver", "err", err)
+		return
+	}
+
+	focusStore := store.New(db)
+
+	err = focusStore.Reset()
+	if err != nil {
+		log.Crit("unable to reset store", "err", err)
+		return
+	}
+
+	srv, _ := New(focusStore.Msgs())
 
 	cls := [4]cl{}
 

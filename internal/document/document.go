@@ -4,23 +4,25 @@
 package document
 
 import (
+	log "gopkg.in/inconshreveable/log15.v2"
+
 	im "github.com/mstone/focus/internal/msgs"
 	"github.com/mstone/focus/ot"
-	// "gopkg.in/inconshreveable/log15.v2"
 )
 
 // struct doc represents a vaporpad (like a file)
 type doc struct {
-	msgs  chan interface{}
-	srvr  chan interface{}
-	store chan interface{}
-	name  string
-	conns map[chan interface{}]struct{}
-	hist  []ot.Ops
-	comp  ot.Ops
+	msgs    chan interface{}
+	srvr    chan interface{}
+	store   chan interface{}
+	name    string
+	storeid int64
+	conns   map[chan interface{}]struct{}
+	hist    []ot.Ops
+	comp    ot.Ops
 }
 
-func New(srvr chan interface{}, store chan interface{}, name string) chan interface{} {
+func New(srvr chan interface{}, store chan interface{}, name string) (chan interface{}, error) {
 	d := &doc{
 		msgs:  make(chan interface{}),
 		srvr:  srvr,
@@ -31,7 +33,20 @@ func New(srvr chan interface{}, store chan interface{}, name string) chan interf
 		comp:  ot.Ops{},
 	}
 	go d.readLoop()
-	return d.msgs
+
+	repl := make(chan im.Storedocresp, 1)
+	d.store <- im.Storedoc{
+		Reply: repl,
+		Name:  d.name,
+	}
+	resp := <-repl
+	if resp.Err != nil {
+		log.Error("unable to create store doc", "err", resp.Err)
+		return nil, resp.Err
+	}
+	d.storeid = resp.StoreId
+
+	return d.msgs, nil
 }
 
 func (d *doc) Body() string {

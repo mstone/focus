@@ -4,7 +4,6 @@
 package server
 
 import (
-	"github.com/mstone/focus/internal/server"
 	"go/build"
 	"io/ioutil"
 	"net/http"
@@ -12,12 +11,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jmoiron/sqlx"
+	_ "github.com/mattn/go-sqlite3"
 	log "gopkg.in/inconshreveable/log15.v2"
 
 	"github.com/gorilla/websocket"
 
+	"github.com/mstone/focus/internal/server"
 	"github.com/mstone/focus/msg"
 	"github.com/mstone/focus/ot"
+	"github.com/mstone/focus/store"
 )
 
 func newTestServer(t *testing.T) (*httptest.Server, *Server) {
@@ -26,14 +29,26 @@ func newTestServer(t *testing.T) (*httptest.Server, *Server) {
 		t.Errorf("unable to locate server assets, err: %q", err)
 	}
 
+	db, err := sqlx.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatalf("unable to open test db, err: %q", err)
+	}
+
+	focusStore := store.New(db)
+
+	err = focusStore.Reset()
+	if err != nil {
+		t.Fatalf("unable to reset store, err: %q", err)
+	}
+
 	focusConf := Config{
-		Store:  nil,
+		Store:  focusStore,
 		API:    "",
 		Assets: http.Dir(pkg.Dir),
 	}
 	log.Info("test found assets path", "assets", focusConf.Assets)
 
-	vppSrv, err := server.New(nil)
+	vppSrv, err := server.New(focusStore.Msgs())
 	if err != nil {
 		t.Errorf("error configuring INTERNAL focus test server; err: %q", err)
 	}

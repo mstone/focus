@@ -7,15 +7,18 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	log "gopkg.in/inconshreveable/log15.v2"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/jmoiron/sqlx"
+	log "gopkg.in/inconshreveable/log15.v2"
 
 	"github.com/mstone/focus/internal/connection"
 	im "github.com/mstone/focus/internal/msgs"
 	"github.com/mstone/focus/msg"
 	"github.com/mstone/focus/ot"
+	"github.com/mstone/focus/store"
 )
 
 const numClients = 4
@@ -216,8 +219,24 @@ Loop:
 }
 
 func testOnce(t *testing.T) {
+	var err error
 	log.Crit("boot")
-	focusSrv, err := New(nil)
+
+	db, err := sqlx.Open("sqlite3", ":memory:")
+	if err != nil {
+		log.Crit("unable to open driver", "err", err)
+		return
+	}
+
+	focusStore := store.New(db)
+
+	err = focusStore.Reset()
+	if err != nil {
+		log.Crit("unable to reset store", "err", err)
+		return
+	}
+
+	focusSrv, err := New(focusStore.Msgs())
 	if err != nil {
 		t.Fatalf("err: %s ", err)
 	}

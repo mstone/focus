@@ -73,11 +73,7 @@ func main() {
 		return
 	}
 
-	storeCfg := store.Config{
-		DB: db,
-	}
-
-	store := store.New(storeCfg)
+	store := store.New(db)
 
 	err = store.Reset()
 	if err != nil {

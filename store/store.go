@@ -10,21 +10,19 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	log "gopkg.in/inconshreveable/log15.v2"
-)
 
-type Config struct {
-	DB *sqlx.DB
-}
+	im "github.com/mstone/focus/internal/msgs"
+)
 
 type Store struct {
 	msgs chan interface{}
 	db   *sqlx.DB
 }
 
-func New(config Config) *Store {
+func New(db *sqlx.DB) *Store {
 	st := &Store{
 		msgs: make(chan interface{}),
-		db:   config.DB,
+		db:   db,
 	}
 	go st.readLoop()
 	return st
@@ -36,9 +34,35 @@ func (st *Store) Msgs() chan interface{} {
 
 func (st *Store) readLoop() {
 	for m := range st.msgs {
-		switch m.(type) {
+		switch v := m.(type) {
 		default:
+			log.Error("store got message with unknown type", "msg", m)
+			panic(fmt.Errorf("store got message with unknown type, msg: %q", m))
+		case im.Storedoc:
+			st.onStoreDoc(v.Reply, v.Name)
 		}
+	}
+}
+
+func (st *Store) onStoreDoc(reply chan im.Storedocresp, name string) {
+	idBox, err := transact2(st.db, func(tx *sqlx.Tx) (interface{}, error) {
+		res, err := tx.Exec("INSERT INTO document (id, name) VALUES (?, ?)", nil, name)
+		if err != nil {
+			log.Error("unable to insert store doc", "name", name, "err", err)
+			return nil, err
+		}
+		return res.LastInsertId()
+	})
+	if err != nil {
+		log.Error("unable to store doc", "name", name, "err", err)
+		reply <- im.Storedocresp{
+			Err: err,
+		}
+	}
+	id := idBox.(int64)
+	reply <- im.Storedocresp{
+		Err:     nil,
+		StoreId: id,
 	}
 }
 

@@ -42,13 +42,13 @@ type Allocdocresp struct {
 
 // processed by store for doc
 type Storedoc struct {
-	Reply chan Allocdocresp
+	Reply chan Storedocresp
 	Name  string
 }
 
 type Storedocresp struct {
 	Err     error
-	StoreId int
+	StoreId int64
 }
 
 // processed by doc for conn
