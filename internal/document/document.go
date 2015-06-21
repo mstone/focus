@@ -34,18 +34,35 @@ func New(srvr chan interface{}, store chan interface{}, name string) (chan inter
 	}
 	go d.readLoop()
 
-	// BUG(mistone): only store docs that don't already exist.
-	repl := make(chan im.Storedocresp, 1)
-	d.store <- im.Storedoc{
-		Reply: repl,
+	replLoad := make(chan im.Loaddocresp, 1)
+	d.store <- im.Loaddoc{
+		Reply: replLoad,
 		Name:  d.name,
 	}
-	resp := <-repl
-	if resp.Err != nil {
-		log.Error("unable to create store doc", "err", resp.Err)
-		return nil, resp.Err
+	respLoad := <-replLoad
+	if respLoad.Err != nil {
+		log.Error("unable to load doc", "err", respLoad.Err)
+		return nil, respLoad.Err
 	}
-	d.storeid = resp.StoreId
+	if respLoad.Ok {
+		d.storeid = respLoad.StoreId
+		d.hist = respLoad.History
+		for _, ops := range d.hist {
+			d.comp = ot.Compose(d.comp, ops)
+		}
+	} else {
+		repl := make(chan im.Storedocresp, 1)
+		d.store <- im.Storedoc{
+			Reply: repl,
+			Name:  d.name,
+		}
+		resp := <-repl
+		if resp.Err != nil {
+			log.Error("unable to create store doc", "err", resp.Err)
+			return nil, resp.Err
+		}
+		d.storeid = resp.StoreId
+	}
 
 	return d.msgs, nil
 }

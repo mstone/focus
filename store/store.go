@@ -5,6 +5,7 @@
 package store
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"runtime/debug"
@@ -40,11 +41,66 @@ func (st *Store) readLoop() {
 		default:
 			log.Error("store got message with unknown type", "msg", m)
 			panic(fmt.Errorf("store got message with unknown type, msg: %q", m))
+		case im.Loaddoc:
+			st.onLoadDoc(v.Reply, v.Name)
 		case im.Storedoc:
 			st.onStoreDoc(v.Reply, v.Name)
 		case im.Storewrite:
 			st.onStoreWrite(v.Reply, v.DocId, v.Rev, v.Ops)
 		}
+	}
+}
+
+type loadDoc struct {
+	Ok      bool
+	StoreId int64
+	History []ot.Ops
+}
+
+func (st *Store) onLoadDoc(reply chan im.Loaddocresp, name string) {
+	ldBox, err := transact2(st.db, func(tx *sqlx.Tx) (interface{}, error) {
+		var id int64
+		err := tx.QueryRow("SELECT id FROM document WHERE name = ?", name).Scan(&id)
+		switch {
+		case err == sql.ErrNoRows:
+			return loadDoc{Ok: false}, nil
+		case err != nil:
+			log.Error("unable to select document", "name", name, "err", err)
+			return nil, err
+		}
+		rows, err := tx.Query("SELECT body FROM operation WHERE document_id = ? ORDER BY revision_number ASC", id)
+		if err != nil {
+			log.Error("unable to select document operations", "name", name, "id", id, "err", err)
+			return nil, err
+		}
+		defer rows.Close()
+		ld := loadDoc{}
+		for rows.Next() {
+			var body string
+			err = rows.Scan(&body)
+			if err != nil {
+				log.Error("unable to scan document operation", "name", name, "id", id, "err", err)
+				return nil, err
+			}
+			ops := ot.Ops{}
+			err = json.Unmarshal([]byte(body), &ops)
+			ld.History = append(ld.History, ops.Clone())
+		}
+		ld.Ok = true
+		ld.StoreId = id
+		return ld, nil
+	})
+	if err != nil {
+		log.Error("unable to load document", "name", name, "err", err)
+		reply <- im.Loaddocresp{Err: err}
+		return
+	}
+	ld := ldBox.(loadDoc)
+	reply <- im.Loaddocresp{
+		Err:     nil,
+		Ok:      ld.Ok,
+		StoreId: ld.StoreId,
+		History: ld.History,
 	}
 }
 

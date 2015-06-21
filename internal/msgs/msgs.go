@@ -41,6 +41,19 @@ type Allocdocresp struct {
 }
 
 // processed by store for doc
+type Loaddoc struct {
+	Reply chan Loaddocresp
+	Name  string
+}
+
+type Loaddocresp struct {
+	Err     error
+	Ok      bool
+	StoreId int64
+	History []ot.Ops
+}
+
+// processed by store for doc
 type Storedoc struct {
 	Reply chan Storedocresp
 	Name  string
