@@ -90,3 +90,17 @@ type Readallresp struct {
 	Body string
 	Rev  int
 }
+
+// processed by store for doc
+type Storewrite struct {
+	Reply chan Storewriteresp
+	DocId int64
+	// AuthorId int64
+	Rev int
+	Ops ot.Ops
+}
+
+type Storewriteresp struct {
+	Err     error
+	StoreId int64
+}

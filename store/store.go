@@ -5,6 +5,7 @@
 package store
 
 import (
+	"encoding/json"
 	"fmt"
 	"runtime/debug"
 
@@ -12,6 +13,7 @@ import (
 	log "gopkg.in/inconshreveable/log15.v2"
 
 	im "github.com/mstone/focus/internal/msgs"
+	"github.com/mstone/focus/ot"
 )
 
 type Store struct {
@@ -40,6 +42,8 @@ func (st *Store) readLoop() {
 			panic(fmt.Errorf("store got message with unknown type, msg: %q", m))
 		case im.Storedoc:
 			st.onStoreDoc(v.Reply, v.Name)
+		case im.Storewrite:
+			st.onStoreWrite(v.Reply, v.DocId, v.Rev, v.Ops)
 		}
 	}
 }
@@ -55,12 +59,37 @@ func (st *Store) onStoreDoc(reply chan im.Storedocresp, name string) {
 	})
 	if err != nil {
 		log.Error("unable to store doc", "name", name, "err", err)
-		reply <- im.Storedocresp{
-			Err: err,
-		}
+		reply <- im.Storedocresp{Err: err}
+		return
 	}
 	id := idBox.(int64)
 	reply <- im.Storedocresp{
+		Err:     nil,
+		StoreId: id,
+	}
+}
+
+func (st *Store) onStoreWrite(reply chan im.Storewriteresp, docId int64, rev int, ops ot.Ops) {
+	idBox, err := transact2(st.db, func(tx *sqlx.Tx) (interface{}, error) {
+		opsBytes, err := json.Marshal(ops)
+		if err != nil {
+			log.Error("unable to marshal ops", "ops", ops, "err", err)
+			return nil, err
+		}
+		res, err := tx.Exec("INSERT INTO operation (id, document_id, author_id, revision_number, body) VALUES (?, ?, ?, ?, ?)", nil, docId, nil, rev, string(opsBytes))
+		if err != nil {
+			log.Error("unable to insert ops", "ops", ops, "err", err)
+			return nil, err
+		}
+		return res.LastInsertId()
+	})
+	if err != nil {
+		log.Error("unable to store ops", "err", err)
+		reply <- im.Storewriteresp{Err: err}
+		return
+	}
+	id := idBox.(int64)
+	reply <- im.Storewriteresp{
 		Err:     nil,
 		StoreId: id,
 	}

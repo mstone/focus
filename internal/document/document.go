@@ -34,6 +34,7 @@ func New(srvr chan interface{}, store chan interface{}, name string) (chan inter
 	}
 	go d.readLoop()
 
+	// BUG(mistone): only store docs that don't already exist.
 	repl := make(chan im.Storedocresp, 1)
 	d.store <- im.Storedoc{
 		Reply: repl,
@@ -90,6 +91,8 @@ func (d *doc) readLoop() {
 			}
 		case im.Write:
 			rev, ops := d.transform(v.Rev, v.Ops.Clone())
+			// BUG(mistone): need to figure out how to handle store write errors!
+			d.record(v.Conn, rev, ops)
 			// log15.Info("recv", "obj", "doc", "rev", v.Rev, "hash", v.Hash, "ops", v.Ops, "docrev", len(d.hist), "dochist", d.Body(), "nrev", rev, "tops", ops)
 			d.broadcast(v.Conn, rev, ops)
 		}
@@ -128,6 +131,23 @@ func (d *doc) transform(rev int, clientOps ot.Ops) (int, ot.Ops) {
 	rev = len(d.hist)
 
 	return rev, forServer
+}
+
+func (d *doc) record(conn chan interface{}, rev int, ops ot.Ops) error {
+	repl := make(chan im.Storewriteresp, 1)
+	d.store <- im.Storewrite{
+		Reply: repl,
+		DocId: d.storeid,
+		// AuthorId: ...
+		Rev: rev,
+		Ops: ops,
+	}
+	resp := <-repl
+	if resp.Err != nil {
+		log.Error("unable to store write", "err", resp.Err)
+		return resp.Err
+	}
+	return nil
 }
 
 func (d *doc) broadcast(conn chan interface{}, rev int, ops ot.Ops) {
