@@ -7,13 +7,44 @@ package main
 
 import (
 	"encoding/json"
-	"github.com/gopherjs/gopherjs/js"
-	"github.com/mstone/focus/msg"
+	"fmt"
 
+	"github.com/gopherjs/gopherjs/js"
+
+	"github.com/mstone/focus/msg"
 	"github.com/mstone/focus/js/ace"
 	"github.com/mstone/focus/js/alert"
 	"github.com/mstone/focus/ot"
 )
+
+func makeGetElementById(id string, obj **js.Object) (built bool, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			switch v := r.(type) {
+			case *js.Error:
+				*obj = nil
+				built = true
+				err = v
+			default:
+				*obj = nil
+				built = true
+				err = fmt.Errorf("unknown error while getting editor element; err: %q", r)
+			}
+		}
+	}()
+
+	// stale?
+	if *obj == nil {
+		// rebuild.
+		*obj = js.Global.Get("document").Call("getElementById", id)
+		built = true
+		err = nil
+	} else {
+		built = false
+		err = nil
+	}
+	return built, err
+}
 
 func main() {
 	var aceDiv *js.Object
@@ -25,8 +56,40 @@ func main() {
 	var editor *js.Object
 	var session *js.Object
 
+	// find editor element
+	// find ace obj
+	// create editor object
+	// wire up editor object to editor element
+	// configure editor object
+	// find session object
+	// configure session object
+	// configure editor keys setting
+	// find editor-document object
+	// set document line mode
+	// create session lengther object from session
+	// create OT adapter
+	// create adapter-doc object wrapping editor-doc
+	// wire adapter to the session lengther and to a adapter-doc
+	// get api endpoint
+	// create ot-controller using adapter
+	// create websocket
+	// wire websocket event handlers
+	// create new socketsender from websocket
+	// attach socketsender to controller and adapter
+
+
+
 	// configure ACE + attach adapter
-	aceDiv = js.Global.Get("document").Call("getElementById", "editor")
+	//aceDiv = js.Global.Get("document").Call("getElementById", "editor")
+	built, err := makeGetElementById("editor", &aceDiv)
+	if err != nil {
+		panic(fmt.Errorf("unable to get #editor, err: %q", err))
+	}
+	if !built {
+		panic("surprise; #editor not rebuilt!")
+	}
+
+
 	aceObj = js.Global.Get("ace")
 
 	editor = aceObj.Call("edit", "editor")
