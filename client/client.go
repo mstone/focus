@@ -11,37 +11,51 @@ import (
 
 	"github.com/gopherjs/gopherjs/js"
 
-	"github.com/mstone/focus/msg"
 	"github.com/mstone/focus/js/ace"
 	"github.com/mstone/focus/js/alert"
+	"github.com/mstone/focus/msg"
 	"github.com/mstone/focus/ot"
 )
 
-func makeGetElementById(id string, obj **js.Object) (built bool, err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			switch v := r.(type) {
-			case *js.Error:
-				*obj = nil
-				built = true
-				err = v
-			default:
-				*obj = nil
-				built = true
-				err = fmt.Errorf("unknown error while getting editor element; err: %q", r)
-			}
+func catchJSError(built *bool, err *error) {
+	if r := recover(); r != nil {
+		switch v := r.(type) {
+		case *js.Error:
+			*built = true
+			*err = v
+		default:
+			*built = true
+			*err = fmt.Errorf("unknown error while getting editor element; err: %q", r)
 		}
-	}()
+	}
+}
 
-	// stale?
+func makeGetElementById(id string, obj **js.Object) (built bool, err error) {
+	defer catchJSError(&built, &err)
+
 	if *obj == nil {
-		// rebuild.
 		*obj = js.Global.Get("document").Call("getElementById", id)
 		built = true
-		err = nil
-	} else {
-		built = false
-		err = nil
+	}
+	return built, err
+}
+
+func makeEditorWiredCheckpoint(aceObj *js.Object, id string, editorObj **js.Object) (built bool, err error) {
+	defer catchJSError(&built, &err)
+
+	if *editorObj == nil {
+		*editorObj = aceObj.Call("edit", id)
+		built = true
+	}
+	return built, err
+}
+
+func makeGetGlobal(name string, obj **js.Object) (built bool, err error) {
+	defer catchJSError(&built, &err)
+
+	if *obj == nil {
+		*obj = js.Global.Get(name)
+		built = true
 	}
 	return built, err
 }
@@ -77,22 +91,23 @@ func main() {
 	// create new socketsender from websocket
 	// attach socketsender to controller and adapter
 
-
-
 	// configure ACE + attach adapter
 	//aceDiv = js.Global.Get("document").Call("getElementById", "editor")
 	built, err := makeGetElementById("editor", &aceDiv)
-	if err != nil {
-		panic(fmt.Errorf("unable to get #editor, err: %q", err))
-	}
-	if !built {
-		panic("surprise; #editor not rebuilt!")
+	if err != nil || !built {
+		panic(fmt.Errorf("unable to get #editor, built: %s, err: %q", built, err))
 	}
 
+	built, err = makeGetGlobal("ace", &aceObj)
+	if err != nil || !built {
+		panic(fmt.Errorf("unable to get ace object, built: %s, err: %q", built, err))
+	}
 
-	aceObj = js.Global.Get("ace")
+	built, err = makeEditorWiredCheckpoint(aceObj, "editor", &editor)
+	if err != nil || !built {
+		panic(fmt.Errorf("unable to wire #editor, built: %s, err: %q", built, err))
+	}
 
-	editor = aceObj.Call("edit", "editor")
 	editor.Call("setTheme", "ace/theme/chrome")
 
 	session = editor.Call("getSession")
