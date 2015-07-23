@@ -153,21 +153,8 @@ func main() {
 	vaporpadName := aceDiv.Get("dataset").Get("vppName")
 
 	state = ot.NewController(adapter, adapter)
-	conn = js.Global.Get("WebSocket").New(apiEndPoint.String())
 
-	conn.Set("onclose", func(e *js.Object) {
-	})
-	conn.Set("onopen", func(e *js.Object) {
-
-		jsOps, _ := json.Marshal(msg.Msg{
-			Cmd:  msg.C_OPEN,
-			Name: vaporpadName.String(),
-		})
-		go func() {
-			conn.Call("send", jsOps)
-		}()
-	})
-	conn.Set("onmessage", func(e *js.Object) {
+	connSender := ace.NewReconnectingSocketSender(apiEndPoint.String(), vaporpadName.String(), func(e *js.Object) {
 		m := msg.Msg{}
 
 		err := json.Unmarshal([]byte(e.Get("data").String()), &m)
@@ -188,8 +175,6 @@ func main() {
 			state.OnServerWrite(m.Rev, m.Ops)
 		}
 	})
-
-	connSender := ace.NewSocketSender(conn)
 
 	adapter.AttachSocket(state, connSender)
 }
