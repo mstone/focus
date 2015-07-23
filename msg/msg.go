@@ -2,6 +2,7 @@
 // Please see the accompanying LICENSE file for licensing information.
 
 // Package msg defines the main messages used in the Focus protocol.
+// See docs/protocol.adoc for further protocol description.
 package msg
 
 import (

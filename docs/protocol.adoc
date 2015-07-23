@@ -1,0 +1,122 @@
+= Vaporpad Protocol (VPP) Specification
+Michael Stone <mistone@akamai.com>
+v0.1, 2015-7-20
+:toc:
+:homepage: http://github.com/mstone/focus
+:numbered:
+:sectlinks:
+:icons: font
+
+ifdef::env-github[:outfilesuffix: .adoc]
+
+== Protocol Overview
+
+VPP is a stateful RPC-based <<intent#PR-1,client-server protocol>>.
+
+The protocol unfolds in four stages: authentication, subscription, steady-state processing, and closure.
+
+In each stage, the participants exchange VPP messages using the abstract syntax described in more detail below. However, at a high level, these messages provide for:
+
+  * opening documents (`C_OPEN`), 
+  * assigning channel-bound document handles ("fds") similar to UNIX file descriptors (`C_OPEN_RESP`), 
+  * communicating document edits (`C_WRITE`), and 
+  * acknowledging document edits (`C_WRITE_RESP`).
+
+Next, we describe the protocol stages in more detail.
+
+== Protocol Stages
+
+=== Authentication
+
+tbd., but probably ultimately SASL EXTERNAL or server-managed?
+
+=== Subscription
+
+VPP is intended ↑(<<intent#PR-6,Protocol Purpose>>, <<intent#CL-6,Multiplexing>>) to allow clients to multiplex operations on multiple vaporfields over a single VPP connection ↑(<<intent#CL-3.1,WebSockets>>, <<intent#VPP-1,Transport Requirements>>).
+
+Consequently, authenticated VPP clients can request new subscriptions to documents of their choice by sending `C_OPEN` commands and awaiting `C_OPEN_RESP` replies.
+
+=== Steady-State
+
+Once subscribed, VPP client subscriptions are considered to be in "steady state" until they close, whether via explicit client direction (tbd.) or via closure of the underlying VPP transport (e.g., via timeout).
+
+In steady-state, VPP clients receive `C_WRITE` commands following external document changes and can send writes of their own (via client-initiated `C_WRITE`).
+
+Accepted writes will then be rebased, acked (to the initiating client) with a `C_WRITE_RESP` message indicating the resulting new server document revision number, and retransmitted to all other clients subscribed to the same document.
+
+=== Closure
+
+Today, VPP subscriptions close when the server detects that the underlying transport connection has closed, e.g., via timeout or clean shutdown.
+
+== Abstract Syntax
+
+=== Command Tags
+
+VPP Commands are identified by integer tags like so: 
+
+.VPP Cmd Tags
+----
+enum {
+	C_NIL(0), 
+	C_OPEN(1), 
+	C_OPEN_RESP(2), 
+	C_WRITE(3), 
+	C_WRITE_RESP(4),
+} Cmd;
+----
+
+=== String Operations
+
+Many messages transmit ordered sequences of operations ("ops") which convey the following information:
+
+.VPP Op Tags and Ops
+----
+enum {
+	O_NIL(0),
+	O_INSERT(1),
+	O_RETAIN(2),
+	O_DELETE(3),
+} OpTag;
+
+struct {
+	select(OpTag) { // <1>
+		rune Insert<0..?>; // <2>
+		int Retain;
+		int Delete;
+	};
+} Op;
+----
+<1> Note: in many encodings, the `OpTag` selector is encoded implicitly in the first octet of the Op struct; for example, in the standard JSON encoding of a VPP Op, `[` indicates an insertion, `1-9` indicates a retain, and `-` indicates a deletion.
+
+<2> Insertions are encoded as sequences of runes; i.e., of UTF-32 (UCS-4)-encoded Unicode code-points.
+
+=== Protocol Messages
+
+Excluding `C_NIL` (which is defined primarily to ease the detection of the transmission of uninitialized messages), VPP defines four messages:
+
+.VPP Msg
+----
+struct {
+	select (Cmd) {
+		case C_NIL:
+			;
+		case C_OPEN:
+			string Name;
+		case C_OPEN_RESP:
+			string Name;
+			int Fd;
+		case C_WRITE:
+			int Fd;
+			int Rev;
+			Op Ops<0..?>;
+		case C_WRITE_RESP:
+			int Fd;
+			int Rev;
+			Op Ops<0..?>;
+	};
+} Msg;
+----
+
+
+
+
