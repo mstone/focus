@@ -60,12 +60,33 @@ func makeGetGlobal(name string, obj **js.Object) (built bool, err error) {
 	return built, err
 }
 
+func makeEditSession(editorObj *js.Object, sessionObj **js.Object) (built bool, err error) {
+	defer catchJSError(&built, &err)
+
+	if *sessionObj == nil {
+		*sessionObj = editorObj.Call("getSession")
+		built = true
+	}
+	return built, err
+}
+
+func makeDocument(sessionObj *js.Object, docObj **js.Object) (built bool, err error) {
+	defer catchJSError(&built, &err)
+
+	if *docObj == nil {
+		*docObj = sessionObj.Call("getDocument")
+		built = true
+	}
+	return built, err
+}
+
 func main() {
+	var built bool
+	var err error
 	var aceDiv *js.Object
 	var aceObj *js.Object
 	var adapter *ace.Adapter
 	var state *ot.Controller
-	var conn *js.Object
 	var doc *js.Object
 	var editor *js.Object
 	var session *js.Object
@@ -91,39 +112,41 @@ func main() {
 	// create new socketsender from websocket
 	// attach socketsender to controller and adapter
 
-	// configure ACE + attach adapter
-	//aceDiv = js.Global.Get("document").Call("getElementById", "editor")
-	built, err := makeGetElementById("editor", &aceDiv)
-	if err != nil || !built {
-		panic(fmt.Errorf("unable to get #editor, built: %s, err: %q", built, err))
+	panicBuiltErr := func(step string) {
+		if !built || err != nil {
+			panic(fmt.Errorf("unable to %s, built: %s, err: %q", step, built, err))
+		}
 	}
+
+	built, err = makeGetElementById("editor", &aceDiv)
+	panicBuiltErr("get #editor")
 
 	built, err = makeGetGlobal("ace", &aceObj)
-	if err != nil || !built {
-		panic(fmt.Errorf("unable to get ace object, built: %s, err: %q", built, err))
-	}
+	panicBuiltErr("get ACE obj")
 
 	built, err = makeEditorWiredCheckpoint(aceObj, "editor", &editor)
-	if err != nil || !built {
-		panic(fmt.Errorf("unable to wire #editor, built: %s, err: %q", built, err))
-	}
+	panicBuiltErr("wire #editor")
 
-	editor.Call("setTheme", "ace/theme/chrome")
+	editor.Call("setTheme", "ace/theme/chrome") // XXX: buildify?
 
-	session = editor.Call("getSession")
-	session.Call("setMode", "ace/mode/markdown")
+	built, err = makeEditSession(editor, &session)
+	panicBuiltErr("get EditSession")
+
+	session.Call("setMode", "ace/mode/markdown") // XXX: buildify?
 
 	keys := map[string]interface{}{}
 	keys["ctrl-t"] = nil
-	editor.Get("commands").Call("bindKeys", keys)
+	editor.Get("commands").Call("bindKeys", keys) // XXX: buildify?
 
-	doc = editor.Call("getSession").Call("getDocument")
-	doc.Call("setNewLineMode", "unix")
+	makeDocument(session, &doc)
+	panicBuiltErr("get ACE document")
+
+	doc.Call("setNewLineMode", "unix") // XXX: buildify?
 
 	sessionLengther := ace.NewSessionLengther(session)
 
 	adapter = ace.NewAdapter()
-	adapter.AttachEditor(sessionLengther, ace.NewJSDocument(doc))
+	adapter.AttachEditor(sessionLengther, ace.NewJSDocument(doc)) // XXX: buildify?
 
 	// configure socket
 	apiEndPoint := aceDiv.Get("dataset").Get("vppApi")
