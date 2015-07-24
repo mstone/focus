@@ -73,7 +73,7 @@ func (d *doc) Body() string {
 	return doc.String()
 }
 
-func (d *doc) openDescription(fd int, conn chan interface{}) {
+func (d *doc) openDescription(fd int, clientRev int, conn chan interface{}) {
 	d.conns[conn] = struct{}{}
 
 	m := im.Openresp{
@@ -84,11 +84,21 @@ func (d *doc) openDescription(fd int, conn chan interface{}) {
 	}
 	conn <- m
 
-	rev := len(d.hist)
+	// if serverRev < rev, panic?
+	serverRev := len(d.hist)
+	opsForClient := ot.Ops{}
+	if clientRev == 0 {
+		opsForClient = d.comp.Clone()
+	} else {
+		if clientRev < serverRev {
+			opsForClient = ot.ComposeAll(d.hist[clientRev : serverRev-1])
+		}
+	}
+
 	m2 := im.Write{
 		Doc: d.msgs,
-		Rev: rev,
-		Ops: d.comp.Clone(),
+		Rev: serverRev,
+		Ops: opsForClient, // danger; commutativity violation?
 	}
 	conn <- m2
 }
@@ -99,7 +109,7 @@ func (d *doc) readLoop() {
 		default:
 			panic("doc read unknown message")
 		case im.Open:
-			d.openDescription(v.Fd, v.Conn)
+			d.openDescription(v.Fd, v.Rev, v.Conn)
 		case im.Readall:
 			v.Reply <- im.Readallresp{
 				Name: d.name,

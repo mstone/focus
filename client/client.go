@@ -154,7 +154,7 @@ func main() {
 
 	state = ot.NewController(adapter, adapter)
 
-	connSender := ace.NewReconnectingSocketSender(apiEndPoint.String(), vaporpadName.String(), func(e *js.Object) {
+	connSender := ace.NewReconnectingSocketSender(apiEndPoint.String(), func(e *js.Object) {
 		m := msg.Msg{}
 
 		err := json.Unmarshal([]byte(e.Get("data").String()), &m)
@@ -173,6 +173,12 @@ func main() {
 			state.OnServerAck(m.Rev, m.Ops)
 		case msg.C_WRITE:
 			state.OnServerWrite(m.Rev, m.Ops)
+		}
+	}, func() msg.Msg {
+		return msg.Msg{
+			Cmd:  msg.C_OPEN,
+			Name: vaporpadName.String(),
+			Rev:  state.ServerRev(),
 		}
 	})
 

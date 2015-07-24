@@ -26,18 +26,18 @@ func (s SocketSender) Send(msg []byte) {
 }
 
 type ReconnectingSocketSender struct {
-	conn         *js.Object
-	apiEndPoint  string
-	vaporpadName string
-	onMessage    func(e *js.Object)
+	conn        *js.Object
+	apiEndPoint string
+	onMessage   func(e *js.Object)
+	newOpenMsg  func() msg.Msg
 }
 
-func NewReconnectingSocketSender(apiEndPoint string, vaporpadName string, onMessage func(e *js.Object)) *ReconnectingSocketSender {
+func NewReconnectingSocketSender(apiEndPoint string, onMessage func(e *js.Object), newOpenMsg func() msg.Msg) *ReconnectingSocketSender {
 	r := ReconnectingSocketSender{
-		conn:         js.Global.Get("WebSocket").New(apiEndPoint),
-		apiEndPoint:  apiEndPoint,
-		vaporpadName: vaporpadName,
-		onMessage:    onMessage,
+		conn:        js.Global.Get("WebSocket").New(apiEndPoint),
+		apiEndPoint: apiEndPoint,
+		onMessage:   onMessage,
+		newOpenMsg:  newOpenMsg,
 	}
 	r.wireConn()
 	return &r
@@ -55,10 +55,7 @@ func (r *ReconnectingSocketSender) onClose(e *js.Object) {
 }
 
 func (r *ReconnectingSocketSender) onOpen(e *js.Object) {
-	jsOps, _ := json.Marshal(msg.Msg{
-		Cmd:  msg.C_OPEN,
-		Name: r.vaporpadName,
-	})
+	jsOps, _ := json.Marshal(r.newOpenMsg())
 	r.conn.Call("send", jsOps)
 }
 

@@ -69,6 +69,7 @@ type Open struct {
 	Conn chan interface{}
 	Name string
 	Fd   int
+	Rev  int
 }
 
 type Openresp struct {

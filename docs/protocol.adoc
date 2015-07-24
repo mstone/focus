@@ -102,6 +102,7 @@ struct {
 			;
 		case C_OPEN:
 			string Name;
+			int Rev;
 		case C_OPEN_RESP:
 			string Name;
 			int Fd;

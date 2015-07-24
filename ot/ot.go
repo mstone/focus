@@ -737,3 +737,7 @@ func (c *Controller) OnServerWrite(rev int, ops Ops) {
 func (c *Controller) IsSynchronized() bool {
 	return c.state == CS_SYNCED
 }
+
+func (c *Controller) ServerRev() int {
+	return c.serverRev
+}

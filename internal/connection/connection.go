@@ -105,6 +105,7 @@ func (c *conn) onVppOpen(m msg.Msg) {
 		Conn: c.msgs,
 		Name: m.Name,
 		Fd:   fd,
+		Rev:  m.Rev,
 	}
 }
 
