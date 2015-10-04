@@ -114,9 +114,10 @@ func (o *Op) IsZero() bool {
 	if o == nil {
 		return true
 	}
-	return o.Size == 0 && len(o.Body) == 0
+	return o.Tag == O_NIL && o.Size == 0 && len(o.Body) == 0 && len(o.Kids) == 0
 }
 
+// Len returns the tree-len of o; i.e., the number of tree nodes affected by o.
 func (o *Op) Len() int {
 	switch {
 	case o.IsZero():
@@ -128,7 +129,8 @@ func (o *Op) Len() int {
 	case o.IsInsert():
 		return len(o.Body)
 	case o.IsWith():
-		return len(o.Kids) // BUG(mistone): what should Len() return for With ops?
+		// SUBTLE(mistone): W ops have tree-length 1, due to their interaction with D + R ops in compose1().
+		return 1
 	default:
 		panic(fmt.Sprintf("len got bad op, %s", o.String()))
 	}
@@ -450,10 +452,20 @@ func compose1(as, bs Ops) (Ops, error) {
 			ret = append(ret, R(minlen))
 		case oa.IsRetain() && ob.IsDelete():
 			ret = append(ret, D(minlen))
+		case oa.IsRetain() && ob.IsWith():
+			// TODO
 		case oa.IsInsert() && ob.IsRetain():
 			ret = append(ret, Ir(oa.Body[:minlen]))
 		case oa.IsInsert() && ob.IsDelete():
 			// insertion then deletion cancels
+		case oa.IsInsert() && ob.IsWith():
+			// TODO; requires apply()!
+		case oa.IsWith() && ob.IsWith():
+			// TODO
+		case oa.IsWith() && ob.IsRetain():
+			// TODO
+		case oa.IsWith() && ob.IsDelete():
+			// TODO
 		}
 		hcs, err = compose1(has, hbs)
 		if err != nil {
@@ -613,7 +625,7 @@ func Normalize(os Ops) (Ops, error) {
 		case o.IsWith():
 			ret2.With(o.Kids)
 		default:
-			return nil, fmt.Errorf("bad op: %s", o.String())
+			return nil, fmt.Errorf("normalize got bad op: %s", o.String())
 		}
 	}
 
@@ -727,30 +739,42 @@ func (d *Doc) GetRandomOps(numChars int) Ops {
 }
 
 func I(s string) Op {
-	return Op{Tag: O_INSERT, Size: 0, Body: AsRunes(s), Kids: nil}
+	if len(s) == 0 {
+		return Z()
+	}
+	return Op{Tag: O_INSERT, Body: AsRunes(s)}
 }
 
 func Ir(r []rune) Op {
-	return Op{Tag: O_INSERT, Size: 0, Body: r, Kids: nil}
+	if len(r) == 0 {
+		return Z()
+	}
+	return Op{Tag: O_INSERT, Body: r}
 }
 
 func R(n int) Op {
-	return Op{Tag: O_RETAIN, Size: n, Body: nil, Kids: nil}
+	if n == 0 {
+		return Z()
+	}
+	return Op{Tag: O_RETAIN, Size: n}
 }
 
 func D(n int) Op {
+	if n == 0 {
+		return Z()
+	}
 	if n < 0 {
 		n = -n
 	}
-	return Op{Tag: O_DELETE, Size: -n, Body: nil, Kids: nil}
+	return Op{Tag: O_DELETE, Size: -n}
 }
 
 func W(kids Ops) Op {
-	return Op{Tag: O_WITH, Size: 0, Body: nil, Kids: kids}
+	return Op{Tag: O_WITH, Kids: kids}
 }
 
 func Z() Op {
-	return Op{Tag: O_NIL, Size: 0, Body: nil, Kids: nil}
+	return Op{Tag: O_NIL}
 }
 
 func NewInsert(docLen int, pos int, s string) Ops {
