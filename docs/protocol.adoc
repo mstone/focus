@@ -17,9 +17,9 @@ The protocol unfolds in four stages: authentication, subscription, steady-state 
 
 In each stage, the participants exchange VPP messages using the abstract syntax described in more detail below. However, at a high level, these messages provide for:
 
-  * opening documents (`C_OPEN`), 
-  * assigning channel-bound document handles ("fds") similar to UNIX file descriptors (`C_OPEN_RESP`), 
-  * communicating document edits (`C_WRITE`), and 
+  * opening documents (`C_OPEN`),
+  * assigning channel-bound document handles ("fds") similar to UNIX file descriptors (`C_OPEN_RESP`),
+  * communicating document edits (`C_WRITE`), and
   * acknowledging document edits (`C_WRITE_RESP`).
 
 Next, we describe the protocol stages in more detail.
@@ -52,15 +52,15 @@ Today, VPP subscriptions close when the server detects that the underlying trans
 
 === Command Tags
 
-VPP Commands are identified by integer tags like so: 
+VPP Commands are identified by integer tags like so:
 
 .VPP Cmd Tags
 ----
 enum {
-	C_NIL(0), 
-	C_OPEN(1), 
-	C_OPEN_RESP(2), 
-	C_WRITE(3), 
+	C_NIL(0),
+	C_OPEN(1),
+	C_OPEN_RESP(2),
+	C_WRITE(3),
 	C_WRITE_RESP(4),
 } Cmd;
 ----
@@ -76,6 +76,7 @@ enum {
 	O_INSERT(1),
 	O_RETAIN(2),
 	O_DELETE(3),
+	O_WITH(4),
 } OpTag;
 
 struct {

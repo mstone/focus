@@ -11,8 +11,7 @@ import (
 )
 
 func TestJSON(t *testing.T) {
-	c1 := Ops{Op{Size: -1}, Op{Size: 1}, Op{Body: AsRunes("hi")}}
-
+	c1 := Ops{D(1), R(1), I("hi")}
 	j1, err := json.Marshal(c1)
 	if err != nil {
 		t.Fatalf("unable to marshal c1 to json, err %q", err)
@@ -87,13 +86,25 @@ func isOk(t *testing.T, r1, r2 *Doc) {
 func doEpoch(t *testing.T, r1, r2 *Doc, trace [2][]A) {
 	b1 := Ops{}
 	b2 := Ops{}
+	var err error
 	for _, o := range trace[0] {
-		b1 = Compose(b1, o.Apply(r1))
+		b1, err = Compose(b1, o.Apply(r1))
+		if err != nil {
+			t.Fatalf("doEpoch() err: %q", err)
+		}
 	}
 	for _, o := range trace[1] {
-		b2 = Compose(b2, o.Apply(r2))
+		t.Logf("b2: %s, op: %s", b2.String(), o.String())
+		b2, err = Compose(b2, o.Apply(r2))
+		if err != nil {
+			t.Fatalf("doEpoch() err 2: %q", err)
+		}
 	}
-	c1, c2 := Transform(b1, b2)
+	t.Logf("Compose produced b2: %s", b2.String())
+	c1, c2, err := Transform(b1, b2)
+	if err != nil {
+		t.Fatalf("doEpoch() err 3: %s\n\tc1: %s\n\tc2: %s", err, c1.String(), c2.String())
+	}
 	r1.Apply(c2)
 	r2.Apply(c1)
 	isOk(t, r1, r2)
@@ -102,14 +113,12 @@ func doEpoch(t *testing.T, r1, r2 *Doc, trace [2][]A) {
 func doTable(t *testing.T, table []TestCase) {
 	for idx, test := range table {
 		t.Logf("running test case %d", idx)
-		fmt.Printf("\n\nrunning test case %d: %+v\n", idx, test)
 		r1 := NewDoc()
 		r2 := NewDoc()
 
 		doEpoch(t, r1, r2, test.First)
 		doEpoch(t, r1, r2, test.Then)
 		doEpoch(t, r1, r2, test.Rest)
-		fmt.Printf("done running test case %d\n", idx)
 	}
 }
 
@@ -205,7 +214,10 @@ type ComposeCase struct {
 func doComposeTable(t *testing.T, cases []ComposeCase) {
 	for idx, c := range cases {
 		t.Logf("compose %d, composing A[0]: %s, A[1]: %s, expecting B: %s", idx, c.A[0], c.A[1], c.B)
-		a := Compose(c.A[0], c.A[1])
+		a, err := Compose(c.A[0], c.A[1])
+		if err != nil {
+			t.Errorf("compose %d failed; err: %q", err)
+		}
 		if !reflect.DeepEqual(a, c.B) {
 			t.Errorf("compose %d failed; %s -> %s != expected %s", idx, c.A, a, c.B)
 		}
@@ -266,7 +278,7 @@ func doInsertTable(t *testing.T, cases []InsertCase) {
 		a := c.A.Clone()
 		a.Insert(c.B)
 		if !reflect.DeepEqual(a, c.C) {
-			t.Errorf("insert %d failed;\n\tA: %s\n\ta: %s\n\tB:\n\tC: %s", idx, c.A, a, c.B, c.C)
+			t.Fatalf("insert %d failed;\n\tA: %s\n\ta: %s\n\tB: %s\n\tC: %s\n\ta: %#v\n\tC: %#v", idx, c.A, a, AsString(c.B), c.C, a, c.C)
 		}
 	}
 }
@@ -305,7 +317,10 @@ type TransformCase struct {
 func doTransformTable(t *testing.T, cases []TransformCase) {
 	for idx, c := range cases {
 		t.Logf("transform %d, transforming A: %s, B: %s, expecting C: %s, D: %s", idx, c.A, c.B, c.C, c.D)
-		x, y := Transform(c.B, c.A)
+		x, y, err := Transform(c.B, c.A)
+		if err != nil {
+			t.Errorf("transform %d failed, err: %q", err)
+		}
 		if !reflect.DeepEqual(x, c.C) {
 			t.Errorf("transform %d failed;\n\tA: %s\n\tB: %s\n\tC: %s\n\tD: %s\n\tx: %s\n\ty: %s", idx, c.A, c.B, c.C, c.D, x, y)
 		}
@@ -422,13 +437,17 @@ func TestTransform(t *testing.T) {
 
 func testOneCompose(t *testing.T) {
 	composedOps := Ops{}
+	var err error
 
 	d1 := NewDoc()
 
 	for i := 0; i < 100; i++ {
 		ops := d1.GetRandomOps(4)
 		d1.Apply(ops)
-		composedOps = Compose(composedOps, ops)
+		composedOps, err = Compose(composedOps, ops)
+		if err != nil {
+			t.Errorf("testOneCompose compose failed, err: %q", err)
+		}
 	}
 
 	d2 := NewDoc()
@@ -458,7 +477,10 @@ func testOneTransform(t *testing.T) {
 		o2 := d2.GetRandomOps(4)
 		d2.Apply(o2)
 
-		t1, t2 := Transform(o1, o2)
+		t1, t2, err := Transform(o1, o2)
+		if err != nil {
+			t.Errorf("Transform fail, err: %q", err)
+		}
 		d1.Apply(t2)
 		d2.Apply(t1)
 	}

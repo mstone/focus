@@ -42,23 +42,43 @@ import (
 
 type Tag int
 
+const (
+	O_NIL Tag = iota
+	O_INSERT
+	O_RETAIN
+	O_DELETE
+	O_WITH
+)
+
 type Op struct {
+	// Tag indicates what kind of Op we have
+	Tag Tag
+
 	// Len is either delete-len (if negative) or retain-len (if positive)
 	Size int
 
 	// Body is the text to be inserted
 	Body []rune
+
+	// Kids are the child-ops for parent With operations
+	Kids Ops
+}
+
+func CloneRunes(body []rune) []rune {
+	if len(body) == 0 {
+		return nil
+	}
+	ret := make([]rune, len(body))
+	copy(ret, body)
+	return ret
 }
 
 func (o Op) Clone() Op {
-	var body2 []rune
-	if len(o.Body) > 0 {
-		body2 = make([]rune, len(o.Body))
-		copy(body2, o.Body)
-	}
 	return Op{
+		Tag:  o.Tag,
 		Size: o.Size,
-		Body: body2,
+		Body: CloneRunes(o.Body),
+		Kids: o.Kids.Clone(),
 	}
 }
 
@@ -66,22 +86,28 @@ func (o *Op) IsRetain() bool {
 	if o == nil {
 		return false
 	}
-	return o.Size > 0
+	return o.Tag == O_RETAIN && o.Size > 0
 }
 
 func (o *Op) IsDelete() bool {
 	if o == nil {
 		return false
 	}
-	return o.Size < 0
+	return o.Tag == O_DELETE && o.Size < 0
 }
 
 func (o *Op) IsInsert() bool {
 	if o == nil {
 		return false
 	}
-	// return o.Size == 0
-	return o.Size == 0 && len(o.Body) > 0
+	return o.Tag == O_INSERT && o.Size == 0 && len(o.Body) > 0
+}
+
+func (o *Op) IsWith() bool {
+	if o == nil {
+		return false
+	}
+	return o.Tag == O_WITH
 }
 
 func (o *Op) IsZero() bool {
@@ -93,14 +119,18 @@ func (o *Op) IsZero() bool {
 
 func (o *Op) Len() int {
 	switch {
-	case o == nil:
+	case o.IsZero():
 		return 0
-	case o.Size < 0:
+	case o.IsDelete():
 		return -o.Size
-	case o.Size > 0:
+	case o.IsRetain():
 		return o.Size
-	default:
+	case o.IsInsert():
 		return len(o.Body)
+	case o.IsWith():
+		return len(o.Kids) // BUG(mistone): what should Len() return for With ops?
+	default:
+		panic(fmt.Sprintf("len got bad op, %s", o.String()))
 	}
 }
 
@@ -132,6 +162,8 @@ func (o *Op) String() string {
 		return fmt.Sprintf("I%s", AsString(o.Body))
 	case o.IsZero():
 		return "Z"
+	case o.IsWith():
+		return fmt.Sprintf("W%s", o.Kids)
 	default:
 		return fmt.Sprintf("E%#v", o)
 	}
@@ -140,6 +172,9 @@ func (o *Op) String() string {
 type Ops []Op
 
 func (os Ops) Clone() Ops {
+	if len(os) == 0 {
+		return nil
+	}
 	os2 := make(Ops, len(os))
 	for i, op := range os {
 		os2[i] = op.Clone()
@@ -212,10 +247,10 @@ func (os *Ops) Insert(body []rune) {
 		if olen > 1 && ops[olen-2].IsInsert() {
 			(&ops[olen-2]).extendBody(body)
 		} else {
-			os.insertPenultimate(Op{Body: body})
+			os.insertPenultimate(Ir(body))
 		}
 	default:
-		os.insertUltimate(Op{Body: body})
+		os.insertUltimate(Ir(body))
 	}
 }
 
@@ -226,7 +261,7 @@ func (os *Ops) Retain(size int) {
 	case len(*os) > 0 && os.Last().IsRetain():
 		os.Last().Size += size
 	default:
-		os.insertUltimate(Op{Size: size})
+		os.insertUltimate(R(size))
 	}
 }
 
@@ -242,16 +277,24 @@ func (os *Ops) Delete(size int) {
 	if olen > 0 && ops[olen-1].IsDelete() {
 		ops[olen-1].Size += size
 	} else {
-		os.insertUltimate(Op{Size: size})
+		os.insertUltimate(D(size))
 	}
+}
+
+func (os *Ops) With(kids Ops) {
+	os.insertUltimate(W(kids)) // BUG(mistone): should With() fold into previous With ops?
 }
 
 func (o Op) MarshalJSON() ([]byte, error) {
 	switch {
 	case o.IsDelete() || o.IsRetain():
 		return json.Marshal(o.Size)
-	default:
+	case o.IsInsert():
 		return json.Marshal(AsString(o.Body))
+	case o.IsWith():
+		return json.Marshal(o.Kids)
+	default:
+		return nil, fmt.Errorf("error: MarshalJSON() got bad op, o: %s", o.String())
 	}
 }
 
@@ -265,8 +308,16 @@ func (o *Op) UnmarshalJSON(data []byte) error {
 			return err
 		}
 		o.Body = AsRunes(s)
+		o.Tag = O_INSERT
 		return nil
+	case data[0] == '[':
+		o.Tag = O_WITH
+		return json.Unmarshal(data, &o.Kids)
+	case data[0] == '-':
+		o.Tag = O_DELETE
+		return json.Unmarshal(data, &o.Size)
 	default:
+		o.Tag = O_RETAIN
 		return json.Unmarshal(data, &o.Size)
 	}
 }
@@ -279,7 +330,8 @@ func min(a, b int) int {
 	}
 }
 
-func shorten(o Op, nl int) Op {
+func shorten(o Op, nl int) (Op, error) {
+	o = o.Clone()
 	switch {
 	case o.IsRetain():
 		o.Size -= nl
@@ -287,22 +339,32 @@ func shorten(o Op, nl int) Op {
 		o.Size += nl
 	case o.IsInsert():
 		o.Body = o.Body[nl:]
+	case o.IsWith():
+		o.Kids = o.Kids[nl:] // BUG(mistone): how to shorten With ops?
+	default:
+		return Z(), fmt.Errorf("shorten fail, unknown op: %s", o.String())
 	}
-	return o
+	return o, nil
 }
 
-func shortenOps(a Op, b Op) (Op, Op) {
+func shortenOps(a Op, b Op) (Op, Op, error) {
+	var a2, b2 Op
+	var err error
+
 	la := a.Len()
 	lb := b.Len()
+
 	switch {
 	case la == lb:
-		return R(0), R(0)
+		return R(0), R(0), nil
 	case la > lb:
-		return shorten(a, lb), R(0)
+		a2, err = shorten(a, lb)
+		return a2, R(0), err
 	case la <= lb:
-		return R(0), shorten(b, la)
+		b2, err = shorten(b, la)
+		return R(0), b2, err
 	}
-	panic("unreachable")
+	return Z(), Z(), fmt.Errorf("ot.shortenOps() -- unreachable case, a: %s, b: %s", a, b)
 }
 
 func addDeleteOp(d Op, os Ops) Ops {
@@ -319,13 +381,20 @@ func addDeleteOp(d Op, os Ops) Ops {
 	}
 }
 
-func Compose(as, bs Ops) Ops {
-	ret := Normalize(compose1(as, bs))
-	return ret
+func Compose(as, bs Ops) (Ops, error) {
+	cs, err := compose1(as, bs)
+	if err != nil {
+		return nil, err
+	}
+	return Normalize(cs)
 }
 
-func compose1(as, bs Ops) Ops {
+func compose1(as, bs Ops) (Ops, error) {
 	ret := Ops{}
+	rest := Ops{}
+	hcs := Ops{}
+	var err error
+
 	a := 0
 	b := 0
 	la := len(as)
@@ -339,16 +408,22 @@ func compose1(as, bs Ops) Ops {
 	case b == lb:
 		ret = as.Clone()
 	case la > 0 && as[a].IsZero():
-		ret = compose1(as[a+1:], bs)
+		ret, err = compose1(as[a+1:], bs)
 	case lb > 0 && bs[b].IsZero():
-		ret = compose1(as, bs[b+1:])
+		ret, err = compose1(as, bs[b+1:])
 	case la > 0 && as[a].IsDelete():
 		// run insertions, then delete, then apply remaining effects
-		rest := compose1(as[a+1:], bs)
+		rest, err = compose1(as[a+1:], bs)
+		if err != nil {
+			break
+		}
 		ret = addDeleteOp(as[a].Clone(), rest)
 	case lb > 0 && bs[b].IsInsert():
 		// as[a] is insert, retain, or empty so insert then apply remaining effects
-		rest := compose1(as, bs[b+1:])
+		rest, err = compose1(as, bs[b+1:])
+		if err != nil {
+			break
+		}
 		ret = append(ret, bs[b].Clone())
 		ret = append(ret, rest...)
 	case la > 0 && lb > 0:
@@ -356,7 +431,10 @@ func compose1(as, bs Ops) Ops {
 		oa := as[a]
 		ob := bs[b]
 
-		sa, sb := shortenOps(oa, ob)
+		sa, sb, err := shortenOps(oa, ob)
+		if err != nil {
+			break
+		}
 
 		has := Ops{}
 		has = append(has, sa)
@@ -373,67 +451,99 @@ func compose1(as, bs Ops) Ops {
 		case oa.IsRetain() && ob.IsDelete():
 			ret = append(ret, D(minlen))
 		case oa.IsInsert() && ob.IsRetain():
-			ret = append(ret, Op{Body: oa.Body[:minlen]})
+			ret = append(ret, Ir(oa.Body[:minlen]))
 		case oa.IsInsert() && ob.IsDelete():
 			// insertion then deletion cancels
 		}
-		ret = append(ret, compose1(has, hbs)...)
+		hcs, err = compose1(has, hbs)
+		if err != nil {
+			break
+		}
+		ret = append(ret, hcs...)
 	}
-	return ret
+	return ret, err
 }
 
-func ComposeAll(all []Ops) Ops {
+func ComposeAll(all []Ops) (Ops, error) {
 	ret := Ops{}
+	var err error
 	for _, os := range all {
-		ret = Compose(ret, os)
+		ret, err = Compose(ret, os)
+		if err != nil {
+			break
+		}
 	}
-	return ret
+	return ret, err
 }
 
-func Transform(as, bs Ops) (Ops, Ops) {
+func Transform(as, bs Ops) (Ops, Ops, error) {
+	var r1, r2 Ops
+	var err error
+
 	if bs.Empty() {
-		return as.Clone(), bs.Clone()
+		return as.Clone(), bs.Clone(), nil
 	}
-	r1, r2 := transform1(as, bs)
-	r1 = Normalize(r1)
-	r2 = Normalize(r2)
-	return r1, r2
+
+	r1, r2, err = transform1(as, bs)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	r1, err = Normalize(r1)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	r2, err = Normalize(r2)
+	if err != nil {
+		return nil, nil, err
+	}
+	return r1, r2, nil
 }
 
-func transform1(as, bs Ops) (Ops, Ops) {
+func transform1(as, bs Ops) (Ops, Ops, error) {
 	a := 0
 	b := 0
 
-	ra := Ops{}
-	rb := Ops{}
-	sa := Ops{}
-	sb := Ops{}
+	var ra, rb, sa, sb Ops
+	var ta, tb Op
 
 	la := len(as)
 	lb := len(bs)
+
+	var err error
 
 	switch {
 	case a == la && b == lb:
 		break
 	case la > 0 && as.First().IsZero():
-		sa, sb = transform1(as[a+1:], bs)
+		sa, sb, err = transform1(as[a+1:], bs)
 	case lb > 0 && bs.First().IsZero():
-		sa, sb = transform1(as, bs[b+1:])
+		sa, sb, err = transform1(as, bs[b+1:])
 	case la > 0 && as.First().IsInsert():
 		oa := as.First()
 		ra.Insert(oa.Body)
 		rb.Retain(oa.Len())
-		sa, sb = transform1(as[a+1:], bs)
+		sa, sb, err = transform1(as[a+1:], bs)
+		if err != nil {
+			break
+		}
 	case lb > 0 && bs.First().IsInsert():
 		ob := bs.First()
 		ra.Retain(ob.Len())
 		rb.Insert(ob.Body)
-		sa, sb = transform1(as, bs[b+1:])
+		sa, sb, err = transform1(as, bs[b+1:])
+		if err != nil {
+			break
+		}
 	case la > 0 && lb > 0:
 		oa := as.First()
 		ob := bs.First()
 		minlen := min(oa.Len(), ob.Len())
-		ta, tb := shortenOps(*oa, *ob)
+		ta, tb, err = shortenOps(*oa, *ob)
+		if err != nil {
+			break
+		}
 
 		has := Ops{}
 		if !ta.IsZero() {
@@ -457,17 +567,26 @@ func transform1(as, bs Ops) (Ops, Ops) {
 		case oa.IsRetain() && ob.IsDelete():
 			rb.Delete(minlen)
 		}
-		sa, sb = transform1(has, hbs)
+		sa, sb, err = transform1(has, hbs)
+		if err != nil {
+			break
+		}
 	default:
-		panic("unreachable")
+		err = fmt.Errorf("transform failed, as: %s, bs: %s", as.String(), bs.String())
+		if err != nil {
+			break
+		}
 	}
 
 	ret1 := append(ra, sa...)
 	ret2 := append(rb, sb...)
-	return ret1, ret2
+	if err != nil {
+		err = fmt.Errorf("transform failed, as: %s, bs: %s\n\tinner err: %s", as.String(), bs.String(), err.Error())
+	}
+	return ret1, ret2, err
 }
 
-func Normalize(os Ops) Ops {
+func Normalize(os Ops) (Ops, error) {
 	swap := func(a, b *Op) {
 		*a, *b = *b, *a
 	}
@@ -491,12 +610,14 @@ func Normalize(os Ops) Ops {
 			ret2.Delete(o.Size)
 		case o.IsRetain():
 			ret2.Retain(o.Size)
+		case o.IsWith():
+			ret2.With(o.Kids)
 		default:
-			panic("unreachable")
+			return nil, fmt.Errorf("bad op: %s", o.String())
 		}
 	}
 
-	return ret2
+	return ret2, nil
 }
 
 type Doc struct {
@@ -606,19 +727,30 @@ func (d *Doc) GetRandomOps(numChars int) Ops {
 }
 
 func I(s string) Op {
-	return Op{Size: 0, Body: AsRunes(s)}
+	return Op{Tag: O_INSERT, Size: 0, Body: AsRunes(s), Kids: nil}
+}
+
+func Ir(r []rune) Op {
+	return Op{Tag: O_INSERT, Size: 0, Body: r, Kids: nil}
 }
 
 func R(n int) Op {
-	return Op{Size: n, Body: nil}
+	return Op{Tag: O_RETAIN, Size: n, Body: nil, Kids: nil}
 }
 
 func D(n int) Op {
-	return Op{Size: -n, Body: nil}
+	if n < 0 {
+		n = -n
+	}
+	return Op{Tag: O_DELETE, Size: -n, Body: nil, Kids: nil}
+}
+
+func W(kids Ops) Op {
+	return Op{Tag: O_WITH, Size: 0, Body: nil, Kids: kids}
 }
 
 func Z() Op {
-	return Op{}
+	return Op{Tag: O_NIL, Size: 0, Body: nil, Kids: nil}
 }
 
 func NewInsert(docLen int, pos int, s string) Ops {
@@ -680,7 +812,10 @@ func NewController(sender Sender, receiver Receiver) *Controller {
 }
 
 func (c *Controller) OnClientWrite(ops Ops) {
-	ops = Normalize(ops.Clone())
+	ops, err := Normalize(ops.Clone())
+	if err != nil {
+		panic(err)
+	}
 	switch c.state {
 	case CS_SYNCED:
 		c.first = ops
@@ -706,7 +841,14 @@ func (c *Controller) OnServerAck(rev int, ops Ops) {
 	case CS_WAIT_MANY:
 		c.serverRev = rev
 		c.serverDoc.Apply(ops)
-		c.first = Normalize(ComposeAll(c.rest))
+		cs, err := ComposeAll(c.rest)
+		if err != nil {
+			panic("bad ack, compose failed")
+		}
+		c.first, err = Normalize(cs)
+		if err != nil {
+			panic("bad ack, normalize failed")
+		}
 		c.rest = nil
 		c.conn.Send(c.serverRev, c.serverDoc.String(), c.first)
 		c.state = CS_WAIT_ONE
@@ -721,13 +863,26 @@ func (c *Controller) OnServerWrite(rev int, ops Ops) {
 		c.client.Recv(ops)
 	case CS_WAIT_ONE:
 		c.serverRev = rev
-		first2, ops2 := Transform(c.first, ops)
+		first2, ops2, err := Transform(c.first, ops)
+		if err != nil {
+			panic("bad write, transform failed in CS_WAIT_ONE")
+		}
 		c.first = first2
 		c.client.Recv(ops2)
 	case CS_WAIT_MANY:
 		c.serverRev = rev
-		first2, ops2 := Transform(c.first, ops)
-		rest2, ops3 := Transform(ComposeAll(c.rest), ops2)
+		first2, ops2, err := Transform(c.first, ops)
+		if err != nil {
+			panic("bad write, transform failed in CS_WAIT_MANY, pt 1")
+		}
+		cs, err := ComposeAll(c.rest)
+		if err != nil {
+			panic("bad write, compose failed")
+		}
+		rest2, ops3, err := Transform(cs, ops2)
+		if err != nil {
+			panic("bad write, transform failed in CS_WAIT_MANY, pt 2")
+		}
 		c.first = first2
 		c.rest = []Ops{rest2}
 		c.client.Recv(ops3)
