@@ -124,44 +124,44 @@ func doTable(t *testing.T, table []TestCase) {
 
 func TestSerial(t *testing.T) {
 	table := []TestCase{
-		TestCase{
+		{
 			First: Tee([]A{Ins{0, "a"}, Ins{0, "b"}}),
-			Then:  [2][]A{[]A{Ins{0, "c"}}, []A{Ins{0, "d"}}},
+			Then:  [2][]A{{Ins{0, "c"}}, {Ins{0, "d"}}},
 			Rest:  Tee([]A{Ins{1, "e"}}),
 		},
-		TestCase{
+		{
 			First: Tee([]A{Ins{0, "a"}, Del{0, 1}}),
-			Then:  [2][]A{[]A{Ins{0, "c"}}, []A{Ins{0, "d"}}},
+			Then:  [2][]A{{Ins{0, "c"}}, {Ins{0, "d"}}},
 			Rest:  Tee([]A{Ins{1, "e"}}),
 		},
-		TestCase{
+		{
 			First: Tee([]A{Ins{0, "a"}, Ins{0, "b"}}),
-			Then:  [2][]A{[]A{Ins{0, "c"}}, []A{Del{0, 1}}},
+			Then:  [2][]A{{Ins{0, "c"}}, {Del{0, 1}}},
 			Rest:  Tee([]A{Ins{1, "e"}}),
 		},
-		TestCase{
+		{
 			First: Tee([]A{Ins{0, "a"}, Ins{0, "b"}}),
-			Then:  [2][]A{[]A{Del{0, 1}}, []A{Del{0, 1}}},
+			Then:  [2][]A{{Del{0, 1}}, {Del{0, 1}}},
 			Rest:  Tee([]A{Ins{1, "e"}}),
 		},
-		TestCase{
+		{
 			First: Tee([]A{Ins{0, "a"}, Ins{0, "b"}}),
-			Then:  [2][]A{[]A{Del{0, 1}}, []A{Del{1, 1}}},
+			Then:  [2][]A{{Del{0, 1}}, {Del{1, 1}}},
 			Rest:  Tee([]A{Ins{1, "e"}}),
 		},
-		TestCase{
+		{
 			First: Tee([]A{Ins{0, "a"}, Ins{0, "b"}}),
-			Then:  [2][]A{[]A{Del{0, 1}}, []A{Ins{1, "c"}}},
+			Then:  [2][]A{{Del{0, 1}}, {Ins{1, "c"}}},
 			Rest:  Tee([]A{Ins{1, "e"}}),
 		},
-		TestCase{
+		{
 			First: Tee([]A{Ins{0, "a"}, Ins{0, "b"}, Del{0, 1}}),
-			Then:  [2][]A{[]A{Del{0, 1}}, []A{Ins{1, "c"}}},
+			Then:  [2][]A{{Del{0, 1}}, {Ins{1, "c"}}},
 			Rest:  Tee([]A{Ins{1, "e"}}),
 		},
-		TestCase{
+		{
 			First: Tee([]A{Ins{0, "a"}, Ins{1, "b"}, Del{0, 1}, Ins{1, "c"}}),
-			Then:  [2][]A{[]A{Del{1, 1}}, []A{Ins{0, "c"}}},
+			Then:  [2][]A{{Del{1, 1}}, {Ins{0, "c"}}},
 			Rest:  Tee([]A{Ins{2, "e"}}),
 		},
 	}
@@ -172,33 +172,33 @@ func TestSerial(t *testing.T) {
 func TestConcurrent(t *testing.T) {
 	table := []TestCase{
 		// batch concurrent
-		TestCase{
+		{
 			First: [2][]A{
-				[]A{Ins{0, "a"}, Ins{1, "d"}},
-				[]A{Ins{0, "b"}, Ins{1, "c"}},
+				{Ins{0, "a"}, Ins{1, "d"}},
+				{Ins{0, "b"}, Ins{1, "c"}},
 			},
 			Then: Tee(nil),
 			Rest: Tee(nil),
 		},
-		TestCase{
+		{
 			First: [2][]A{
-				[]A{Ins{0, "a"}, Ins{1, "b"}},
-				[]A{Ins{0, "m"}, Ins{1, "n"}},
+				{Ins{0, "a"}, Ins{1, "b"}},
+				{Ins{0, "m"}, Ins{1, "n"}},
 			},
 			Then: [2][]A{
-				[]A{Del{0, 1}, Ins{1, "d"}},
-				[]A{Ins{0, "r"}},
+				{Del{0, 1}, Ins{1, "d"}},
+				{Ins{0, "r"}},
 			},
 			Rest: Tee(nil),
 		},
-		TestCase{
+		{
 			First: [2][]A{
-				[]A{Ins{0, "a"}},
-				[]A{Ins{0, "m"}, Ins{1, "n"}},
+				{Ins{0, "a"}},
+				{Ins{0, "m"}, Ins{1, "n"}},
 			},
 			Then: [2][]A{
-				[]A{Del{0, 1}, Ins{1, "d"}},
-				[]A{Del{1, 1}},
+				{Del{0, 1}, Ins{1, "d"}},
+				{Del{1, 1}},
 			},
 			Rest: Tee(nil),
 		},
@@ -228,7 +228,7 @@ func doShortenOpTable(t *testing.T, cases []ShortenOpCase) {
 
 func TestShortenOp(t *testing.T) {
 	table := []ShortenOpCase{
-		ShortenOpCase{
+		{
 			A: R(1),
 			N: 1,
 			C: Z(),
@@ -265,7 +265,7 @@ func doShortenOpsTable(t *testing.T, cases []ShortenOpsCase) {
 
 func TestShortenOps(t *testing.T) {
 	table := []ShortenOpsCase{
-		ShortenOpsCase{
+		{
 			A: R(1),
 			B: It(Leaf('a')),
 			C: Z(),
@@ -305,35 +305,35 @@ func C(os ...Ops) Ops {
 
 func TestCompose(t *testing.T) {
 	table := []ComposeCase{
-		ComposeCase{
+		{
 			A: [2]Ops{
 				Is("a"),
 				C(Rs(1), Is("b")),
 			},
 			B: Is("ab"),
 		},
-		ComposeCase{
+		{
 			A: [2]Ops{
 				Is("a"),
 				Ds(1),
 			},
 			B: Ops{},
 		},
-		ComposeCase{
+		{
 			A: [2]Ops{
 				Is("ex"),
 				C(Rs(2), Is("4")),
 			},
 			B: Is("ex4"),
 		},
-		ComposeCase{
+		{
 			A: [2]Ops{
 				Is("x"),
 				C(Rs(1), Is("4")),
 			},
 			B: Is("x4"),
 		},
-		ComposeCase{
+		{
 			A: [2]Ops{
 				Is("ex"),
 				C(Rs(1), Is("4"), Rs(1)),
@@ -364,22 +364,22 @@ func doInsertTable(t *testing.T, cases []InsertCase) {
 
 func TestInsert(t *testing.T) {
 	table := []InsertCase{
-		InsertCase{
+		{
 			A: Ops{},
 			B: Leaf('a'),
 			C: Is("a"),
 		},
-		InsertCase{
+		{
 			A: Is("a"),
 			B: Leaf('b'),
 			C: Is("ab"),
 		},
-		InsertCase{
+		{
 			A: append(Is("a"), D(2)),
 			B: Leaf('b'),
 			C: append(Is("ab"), D(2)),
 		},
-		InsertCase{
+		{
 			A: Ops{D(2)},
 			B: Leaf('a'),
 			C: append(Is("a"), D(2)),
@@ -414,7 +414,7 @@ func TestTransform(t *testing.T) {
 		// xy  A  x5y           I I
 		// B       C
 		// xby D  xb5y
-		TransformCase{
+		{
 			A: C(Rs(1), Is("5"), Rs(1)),
 			B: C(Rs(1), Is("b"), Rs(1)),
 			C: C(Rs(1), Is("b"), Rs(2)),
@@ -423,7 +423,7 @@ func TestTransform(t *testing.T) {
 		//  [?]    A     []     D I
 		//  B             C
 		//  [1b?]  D   [1b]
-		TransformCase{
+		{
 			A: C(Zs(), Ds(1), Zs()),
 			B: C(Zs(), Is("1b"), Rs(1)),
 			C: C(Is("1b")),
@@ -432,7 +432,7 @@ func TestTransform(t *testing.T) {
 		//  [?]  A   [1b]       ID D
 		//  B           C
 		//  []   D   [1b]
-		TransformCase{
+		{
 			A: C(Zs(), Is("1b"), Ds(1), Zs()),
 			B: C(Zs(), Ds(1), Zs()),
 			C: C(Rs(2)),
@@ -441,7 +441,7 @@ func TestTransform(t *testing.T) {
 		//  [?]  A   [1b?]       I D
 		//  B           C
 		//  []   D   [1b]
-		TransformCase{
+		{
 			A: C(Zs(), Is("1b"), Rs(1), Zs()),
 			B: C(Zs(), Ds(1), Zs()),
 			C: C(Rs(2), Ds(1)),
@@ -450,7 +450,7 @@ func TestTransform(t *testing.T) {
 		//  [?]  A   [?]       R D
 		//  B         C
 		//  []   D   []
-		TransformCase{
+		{
 			A: C(Zs(), Rs(1), Zs()),
 			B: C(Zs(), Ds(1), Zs()),
 			C: C(Ds(1)),
@@ -459,7 +459,7 @@ func TestTransform(t *testing.T) {
 		//  [?]  A   []        D R
 		//  B         C
 		//  [?]   D  []
-		TransformCase{
+		{
 			A: C(Zs(), Ds(1), Zs()),
 			B: C(Zs(), Rs(1), Zs()),
 			C: C(),
@@ -468,7 +468,7 @@ func TestTransform(t *testing.T) {
 		//  [xyxy]  A   [xy]        D/D
 		//  B             C
 		//  [xy]   D      []
-		TransformCase{
+		{
 			A: C(Rs(1), Ds(2), Rs(1)),
 			B: C(Ds(1), Rs(2), Ds(1)),
 			C: C(Ds(2)),
@@ -477,7 +477,7 @@ func TestTransform(t *testing.T) {
 		//  [xyxy]  A   [x]        D/D
 		//  B             C
 		//  [xaby]  D   [ab]
-		TransformCase{
+		{
 			A: C(Ds(2), Rs(1), Ds(1)),
 			B: C(Rs(1), Is("ab"), Ds(2), Rs(1)),
 			C: C(Is("ab"), Ds(1)),
@@ -486,7 +486,7 @@ func TestTransform(t *testing.T) {
 		//     A:Ia R2          I/I
 		//B:Z Z R2    C
 		//        D
-		TransformCase{
+		{
 			A: C(Is("a"), Rs(2)),
 			B: C(Zs(), Zs(), Rs(2)),
 			C: C(Rs(3)),
@@ -495,7 +495,7 @@ func TestTransform(t *testing.T) {
 		//     A:Ia R2          I/I
 		//B:R1 I6 R1    C
 		//        D
-		TransformCase{
+		{
 			A: C(Is("a"), Rs(2)),
 			B: C(Rs(1), Is("6"), Rs(1)),
 			C: C(Rs(2), Is("6"), Rs(1)),
@@ -504,7 +504,7 @@ func TestTransform(t *testing.T) {
 		//     A:I0 R3          I/I
 		//B:R2 I6 R1    C
 		//        D
-		TransformCase{
+		{
 			A: C(Is("0"), Rs(3)),
 			B: C(Rs(2), Is("6"), Rs(1)),
 			C: C(Rs(3), Is("6"), Rs(1)),
