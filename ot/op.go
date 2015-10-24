@@ -3,6 +3,8 @@ package ot
 import (
 	"fmt"
 	"strings"
+
+	"github.com/juju/errors"
 )
 
 type OpTag int
@@ -179,19 +181,19 @@ func (o Op) SplitAt(n int) (Op, Op, error) {
 	case o.IsZero():
 		return Z(), Z(), nil
 	default:
-		return Z(), Z(), fmt.Errorf("Op.SplitAt failed, attempted to split unknown op, o: %s, n: %d", o.String(), n)
+		return Z(), Z(), errors.Errorf("Op.SplitAt failed, attempted to split unknown op, o: %s, n: %d", o.String(), n)
 	}
 }
 
 func (o Op) splitInsert(n int) (Op, Op, error) {
 	l, r, err := o.Body.SplitAt(n)
-	return It(l), It(r), err
+	return It(l), It(r), errors.Trace(err)
 }
 
 func (o Op) splitRetain(n int) (Op, Op, error) {
 	sz := o.Len()
 	if n > sz {
-		return Z(), Z(), fmt.Errorf("Op.splitRetain failed, o: %s, n: %d", o.String(), n)
+		return Z(), Z(), errors.Errorf("Op.splitRetain failed, o: %s, n: %d", o.String(), n)
 	}
 	return R(n), R(sz - n), nil
 }
@@ -199,7 +201,7 @@ func (o Op) splitRetain(n int) (Op, Op, error) {
 func (o Op) splitDelete(n int) (Op, Op, error) {
 	sz := o.Len()
 	if n > sz {
-		return Z(), Z(), fmt.Errorf("Op.splitDelete failed, o: %s, n: %d", o.String(), n)
+		return Z(), Z(), errors.Errorf("Op.splitDelete failed, o: %s, n: %d", o.String(), n)
 	}
 	return D(n), D(sz - n), nil
 }
@@ -211,14 +213,14 @@ func (o Op) splitWith(n int) (Op, Op, error) {
 	case n == 1:
 		return o, Z(), nil
 	default:
-		return Z(), Z(), fmt.Errorf("Op.splitWith failed, o: %s, n: %d", o.String(), n)
+		return Z(), Z(), errors.Errorf("Op.splitWith failed, o: %s, n: %d", o.String(), n)
 	}
 }
 
 func (os Ops) SplitAt(n int) (Ops, Ops, error) {
 	sz := len(os)
 	if n > sz {
-		return nil, nil, fmt.Errorf("Ops.SplitAt failed, os: %s, n: %d", os.String(), n)
+		return nil, nil, errors.Errorf("Ops.SplitAt failed, os: %s, n: %d", os.String(), n)
 	}
 	return os[:n], os[n:], nil
 }
@@ -236,7 +238,7 @@ func (os Ops) SplitAt(n int) (Ops, Ops, error) {
 // 		copy(op.Body.Kids, lhs)
 // 		copy(op.Body.Kids[len(lhs):], rhs.Kids)
 // 	default:
-// 		panic(fmt.Errorf("extend error: op.Body.Tag != rhs.Tag, op: %s, t: %s", op.String(), rhs.String()))
+// 		panic(errors.Errorf("extend error: op.Body.Tag != rhs.Tag, op: %s, t: %s", op.String(), rhs.String()))
 // 	}
 // }
 

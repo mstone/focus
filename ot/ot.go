@@ -36,6 +36,8 @@ import (
 	"math/big"
 	"sync"
 	"unicode/utf8"
+
+	"github.com/juju/errors"
 )
 
 func CloneRunes(body []rune) []rune {
@@ -63,6 +65,14 @@ func AsString(rs []rune) string {
 	return buf.String()
 }
 
+func AsRuneTree(s string) Tree {
+	kids := make(Trees, utf8.RuneCountInString(s))
+	for i, r := range s {
+		kids[i] = Leaf(r)
+	}
+	return Branch(kids)
+}
+
 func min(a, b int) int {
 	if a < b {
 		return a
@@ -73,7 +83,7 @@ func min(a, b int) int {
 
 func Apply(o Op, t *Tree) error {
 	if !o.IsWith() || !t.IsBranch() {
-		return fmt.Errorf("Apply failed; o: %s, t: %s", o.String(), t.String())
+		return errors.Errorf("Apply failed; o: %s, t: %s", o.String(), t.String())
 	}
 
 	tz := NewZipper(t, 10)
@@ -92,7 +102,7 @@ func Apply(o Op, t *Tree) error {
 		case o.IsWith():
 			err := Apply(o, tz.Current())
 			if err != nil {
-				return err
+				return errors.Trace(err)
 			}
 		}
 	}
@@ -107,7 +117,7 @@ func Apply(o Op, t *Tree) error {
 // 	case o.IsWith() && t.IsBranch():
 // 		ts, err := Apply(o.Kids, t.Kids)
 // 		if err != nil {
-// 			return Tree{}, err
+// 			return Tree{}, errors.Trace(err)
 // 		}
 // 		return Branch(ts), nil
 // 	case o.IsRetain()
@@ -118,7 +128,7 @@ func shortenTrees(ts Trees, nl int) (Trees, error) {
 	ts = ts.Clone()
 	switch {
 	case nl > len(ts):
-		return nil, fmt.Errorf("shortenTrees fail, ts: %s, nl: %d", ts.String(), nl)
+		return nil, errors.Errorf("shortenTrees fail, ts: %s, nl: %d", ts.String(), nl)
 	default:
 		return ts[nl:], nil
 	}
@@ -137,12 +147,12 @@ func shortenOpTrees(a Op, b Trees) (Op, Trees, error) {
 		return Z(), nil, nil
 	case la > lb:
 		a2, err = shortenOp(a, lb)
-		return a2, nil, err
+		return a2, nil, errors.Trace(err)
 	case la <= lb:
 		b2, err = shortenTrees(b, la)
-		return Z(), b2, err
+		return Z(), b2, errors.Trace(err)
 	}
-	return Z(), nil, fmt.Errorf("ot.shortenOpTrees() -- unreachable case, a: %s, b: %s", a.String(), b.String())
+	return Z(), nil, errors.Errorf("ot.shortenOpTrees() -- unreachable case, a: %s, b: %s", a.String(), b.String())
 }
 
 func shortenOp(o Op, nl int) (Op, error) {
@@ -159,7 +169,7 @@ func shortenOp(o Op, nl int) (Op, error) {
 	case o.IsWith():
 		o.Kids = o.Kids[nl:] // BUG(mistone): how to shorten With ops?
 	default:
-		return Z(), fmt.Errorf("shorten fail, unknown op: %s", o.String())
+		return Z(), errors.Errorf("shorten fail, unknown op: %s", o.String())
 	}
 	return o, nil
 }
@@ -176,12 +186,12 @@ func shortenOps(a Op, b Op) (Op, Op, error) {
 		return Z(), Z(), nil
 	case la > lb:
 		a2, err = shortenOp(a, lb)
-		return a2, Z(), err
+		return a2, Z(), errors.Trace(err)
 	case la <= lb:
 		b2, err = shortenOp(b, la)
-		return Z(), b2, err
+		return Z(), b2, errors.Trace(err)
 	}
-	return Z(), Z(), fmt.Errorf("ot.shortenOps() -- unreachable case, a: %s, b: %s", a, b)
+	return Z(), Z(), errors.Errorf("ot.shortenOps() -- unreachable case, a: %s, b: %s", a, b)
 }
 
 func addDeleteOp(d Op, os Ops) Ops {
@@ -201,7 +211,7 @@ func addDeleteOp(d Op, os Ops) Ops {
 func Compose(as, bs Ops) (Ops, error) {
 	cs, err := compose1(as, bs)
 	if err != nil {
-		return nil, err
+		return nil, errors.Trace(err)
 	}
 	return Normalize(cs)
 }
@@ -287,7 +297,7 @@ func compose1(as, bs Ops) (Ops, error) {
 		case oa.IsWith() && ob.IsDelete():
 			// TODO
 		default:
-			err = fmt.Errorf("compose1 error: impossible case\n\tas: %s\n\tbs: %s", as.String(), bs.String())
+			err = errors.Errorf("compose1 error: impossible case\n\tas: %s\n\tbs: %s", as.String(), bs.String())
 		}
 		if err != nil {
 			break
@@ -300,7 +310,7 @@ func compose1(as, bs Ops) (Ops, error) {
 
 		ret = append(ret, hcs...)
 	}
-	return ret, err
+	return ret, errors.Trace(err)
 }
 
 func ComposeAll(all []Ops) (Ops, error) {
@@ -312,7 +322,7 @@ func ComposeAll(all []Ops) (Ops, error) {
 			break
 		}
 	}
-	return ret, err
+	return ret, errors.Trace(err)
 }
 
 func Transform(as, bs Ops) (Ops, Ops, error) {
@@ -325,17 +335,17 @@ func Transform(as, bs Ops) (Ops, Ops, error) {
 
 	r1, r2, err = transform1(as, bs)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, errors.Trace(err)
 	}
 
 	r1, err = Normalize(r1)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, errors.Trace(err)
 	}
 
 	r2, err = Normalize(r2)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, errors.Trace(err)
 	}
 	return r1, r2, nil
 }
@@ -411,7 +421,7 @@ func transform1(as, bs Ops) (Ops, Ops, error) {
 			break
 		}
 	default:
-		err = fmt.Errorf("transform failed, as: %s, bs: %s", as.String(), bs.String())
+		err = errors.Errorf("transform failed, as: %s, bs: %s", as.String(), bs.String())
 		if err != nil {
 			break
 		}
@@ -420,9 +430,9 @@ func transform1(as, bs Ops) (Ops, Ops, error) {
 	ret1 := append(ra, sa...)
 	ret2 := append(rb, sb...)
 	if err != nil {
-		err = fmt.Errorf("transform failed, as: %s, bs: %s\n\tinner err: %s", as.String(), bs.String(), err.Error())
+		err = errors.Annotatef(err, "transform failed, as: %s, bs: %s", as.String(), bs.String())
 	}
-	return ret1, ret2, err
+	return ret1, ret2, errors.Trace(err)
 }
 
 func Normalize(os Ops) (Ops, error) {
@@ -452,7 +462,7 @@ func Normalize(os Ops) (Ops, error) {
 		case o.IsWith():
 			ret2.With(o.Kids)
 		default:
-			return nil, fmt.Errorf("normalize got bad op: %s", o.String())
+			return nil, errors.Errorf("normalize got bad op: %s", o.String())
 		}
 	}
 
@@ -542,7 +552,7 @@ func (d *Doc) GetRandomOps(numChars int) Ops {
 	return ops.Clone()
 }
 
-func I(s string) Ops {
+func Is(s string) Ops {
 	if len(s) == 0 {
 		return nil
 	}
@@ -582,6 +592,10 @@ func R(n int) Op {
 	return Op{Tag: O_RETAIN, Size: n}
 }
 
+func Rs(n int) Ops {
+	return Ops{R(n)}
+}
+
 func D(n int) Op {
 	if n == 0 {
 		return Z()
@@ -592,20 +606,32 @@ func D(n int) Op {
 	return Op{Tag: O_DELETE, Size: -n}
 }
 
+func Ds(n int) Ops {
+	return Ops{D(n)}
+}
+
 func W(kids Ops) Op {
 	return Op{Tag: O_WITH, Kids: kids}
+}
+
+func Ws(kids Ops) Ops {
+	return Ops{W(kids)}
 }
 
 func Z() Op {
 	return Op{Tag: O_NIL}
 }
 
+func Zs() Ops {
+	return Ops{Z()}
+}
+
 func NewInsert(docLen int, pos int, s string) Ops {
 	if pos < 0 || pos > docLen+1 {
-		panic(fmt.Errorf("bad position; insert is out of range; pos: %d, s: %q", pos, s))
+		panic(errors.Errorf("bad position; insert is out of range; pos: %d, s: %q", pos, s))
 	}
 
-	is := I(s)
+	is := Is(s)
 	os := make(Ops, len(is)+2)
 	os[0] = R(pos)
 	copy(os[1:], is)
@@ -615,7 +641,7 @@ func NewInsert(docLen int, pos int, s string) Ops {
 
 func NewDelete(docLen int, pos int, length int) Ops {
 	if pos < 0 || pos+length > docLen+1 {
-		panic(fmt.Errorf("bad position; delete is out of range: pos: %d, len: %d", pos, length))
+		panic(errors.Errorf("bad position; delete is out of range: pos: %d, len: %d", pos, length))
 	}
 
 	return Ops{R(pos), D(length), R(docLen - length - pos)}

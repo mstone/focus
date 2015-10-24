@@ -11,8 +11,7 @@ import (
 )
 
 func TestJSON(t *testing.T) {
-	c1 := Ops{D(1), R(1)}
-	c1 = append(c1, I("hi")...)
+	c1 := C(Ds(1), Rs(1), Is("hi"))
 	j1, err := json.Marshal(c1)
 	if err != nil {
 		t.Fatalf("unable to marshal c1 to json, err %q", err)
@@ -225,42 +224,50 @@ func doComposeTable(t *testing.T, cases []ComposeCase) {
 	}
 }
 
+func C(os ...Ops) Ops {
+	ret := Ops{}
+	for _, o := range os {
+		ret = append(ret, o...)
+	}
+	return ret
+}
+
 func TestCompose(t *testing.T) {
 	table := []ComposeCase{
 		ComposeCase{
 			A: [2]Ops{
-				I("a"),
-				Ops{R(1), I("b")},
+				Is("a"),
+				C(Rs(1), Is("b")),
 			},
-			B: Ops{I("ab")},
+			B: Is("ab"),
 		},
 		ComposeCase{
 			A: [2]Ops{
-				Ops{I("a")},
-				Ops{D(1)},
+				Is("a"),
+				Ds(1),
 			},
 			B: Ops{},
 		},
 		ComposeCase{
 			A: [2]Ops{
-				Ops{I("ex")},
-				Ops{R(2), I("4")},
+				Is("ex"),
+				C(Rs(2), Is("4")),
 			},
-			B: Ops{I("ex4")},
+			B: Is("ex4"),
 		},
 		ComposeCase{
 			A: [2]Ops{
-				Ops{I("x")},
-				Ops{R(1), I("4")},
+				Is("x"),
+				C(Rs(1), Is("4")),
 			},
-			B: Ops{I("x4")},
+			B: Is("x4"),
 		},
 		ComposeCase{
 			A: [2]Ops{
-				Ops{I("ex")},
-				Ops{R(1), I("4"), R(1)},
+				Is("ex"),
+				C(Rs(1), Is("4"), Rs(1)),
 			},
-			B: Ops{I("e4x")},
+			B: Is("e4x"),
 		},
 	}
 
@@ -269,17 +276,17 @@ func TestCompose(t *testing.T) {
 
 type InsertCase struct {
 	A Ops
-	B []rune
+	B Tree
 	C Ops
 }
 
 func doInsertTable(t *testing.T, cases []InsertCase) {
 	for idx, c := range cases {
-		t.Logf("insert %d, inserting A: %s, B: %s, expecting C: %s", idx, c.A, AsString(c.B), c.C)
+		t.Logf("insert %d, inserting A: %s, B: %s, expecting C: %s", idx, c.A, c.B.String(), c.C)
 		a := c.A.Clone()
 		a.Insert(c.B)
 		if !reflect.DeepEqual(a, c.C) {
-			t.Fatalf("insert %d failed;\n\tA: %s\n\ta: %s\n\tB: %s\n\tC: %s\n\ta: %#v\n\tC: %#v", idx, c.A, a, AsString(c.B), c.C, a, c.C)
+			t.Fatalf("insert %d failed;\n\tA: %s\n\ta: %s\n\tB: %s\n\tC: %s\n\ta: %#v\n\tC: %#v", idx, c.A, a, c.B.String(), c.C, a, c.C)
 		}
 	}
 }
@@ -288,23 +295,23 @@ func TestInsert(t *testing.T) {
 	table := []InsertCase{
 		InsertCase{
 			A: Ops{},
-			B: AsRunes("a"),
-			C: Ops{I("a")},
+			B: AsRuneTree("a"),
+			C: Is("a"),
 		},
 		InsertCase{
-			A: Ops{I("a")},
-			B: AsRunes("b"),
-			C: Ops{I("ab")},
+			A: Is("a"),
+			B: AsRuneTree("b"),
+			C: Is("ab"),
 		},
 		InsertCase{
-			A: Ops{I("a"), D(2)},
-			B: AsRunes("b"),
-			C: Ops{I("ab"), D(2)},
+			A: append(Is("a"), D(2)),
+			B: AsRuneTree("b"),
+			C: append(Is("ab"), D(2)),
 		},
 		InsertCase{
 			A: Ops{D(2)},
-			B: AsRunes("a"),
-			C: Ops{I("a"), D(2)},
+			B: AsRuneTree("a"),
+			C: append(Is("a"), D(2)),
 		},
 	}
 
@@ -337,100 +344,100 @@ func TestTransform(t *testing.T) {
 		// B       C
 		// xby D  xb5y
 		TransformCase{
-			A: Ops{R(1), I("5"), R(1)},
-			B: Ops{R(1), I("b"), R(1)},
-			C: Ops{R(1), I("b"), R(2)},
-			D: Ops{R(2), I("5"), R(1)},
+			A: C(Rs(1), Is("5"), Rs(1)),
+			B: C(Rs(1), Is("b"), Rs(1)),
+			C: C(Rs(1), Is("b"), Rs(2)),
+			D: C(Rs(2), Is("5"), Rs(1)),
 		},
 		//  [?]    A     []     D I
 		//  B             C
 		//  [1b?]  D   [1b]
 		TransformCase{
-			A: Ops{Z(), D(1), Z()},
-			B: Ops{Z(), I("1b"), R(1)},
-			C: Ops{I("1b")},
-			D: Ops{R(2), D(1)},
+			A: C(Zs(), Ds(1), Zs()),
+			B: C(Zs(), Is("1b"), Rs(1)),
+			C: C(Is("1b")),
+			D: C(Rs(2), Ds(1)),
 		},
 		//  [?]  A   [1b]       ID D
 		//  B           C
 		//  []   D   [1b]
 		TransformCase{
-			A: Ops{Z(), I("1b"), D(1), Z()},
-			B: Ops{Z(), D(1), Z()},
-			C: Ops{R(2)},
-			D: Ops{I("1b")},
+			A: C(Zs(), Is("1b"), Ds(1), Zs()),
+			B: C(Zs(), Ds(1), Zs()),
+			C: C(Rs(2)),
+			D: C(Is("1b")),
 		},
 		//  [?]  A   [1b?]       I D
 		//  B           C
 		//  []   D   [1b]
 		TransformCase{
-			A: Ops{Z(), I("1b"), R(1), Z()},
-			B: Ops{Z(), D(1), Z()},
-			C: Ops{R(2), D(1)},
-			D: Ops{I("1b")},
+			A: C(Zs(), Is("1b"), Rs(1), Zs()),
+			B: C(Zs(), Ds(1), Zs()),
+			C: C(Rs(2), Ds(1)),
+			D: C(Is("1b")),
 		},
 		//  [?]  A   [?]       R D
 		//  B         C
 		//  []   D   []
 		TransformCase{
-			A: Ops{Z(), R(1), Z()},
-			B: Ops{Z(), D(1), Z()},
-			C: Ops{D(1)},
-			D: Ops{},
+			A: C(Zs(), Rs(1), Zs()),
+			B: C(Zs(), Ds(1), Zs()),
+			C: C(Ds(1)),
+			D: C(),
 		},
 		//  [?]  A   []        D R
 		//  B         C
 		//  [?]   D  []
 		TransformCase{
-			A: Ops{Z(), D(1), Z()},
-			B: Ops{Z(), R(1), Z()},
-			C: Ops{},
-			D: Ops{D(1)},
+			A: C(Zs(), Ds(1), Zs()),
+			B: C(Zs(), Rs(1), Zs()),
+			C: C(),
+			D: C(Ds(1)),
 		},
 		//  [xyxy]  A   [xy]        D/D
 		//  B             C
 		//  [xy]   D      []
 		TransformCase{
-			A: Ops{R(1), D(2), R(1)},
-			B: Ops{D(1), R(2), D(1)},
-			C: Ops{D(2)},
-			D: Ops{D(2)},
+			A: C(Rs(1), Ds(2), Rs(1)),
+			B: C(Ds(1), Rs(2), Ds(1)),
+			C: C(Ds(2)),
+			D: C(Ds(2)),
 		},
 		//  [xyxy]  A   [x]        D/D
 		//  B             C
 		//  [xaby]  D   [ab]
 		TransformCase{
-			A: Ops{D(2), R(1), D(1)},
-			B: Ops{R(1), I("ab"), D(2), R(1)},
-			C: Ops{I("ab"), D(1)},
-			D: Ops{D(1), R(2), D(1)},
+			A: C(Ds(2), Rs(1), Ds(1)),
+			B: C(Rs(1), Is("ab"), Ds(2), Rs(1)),
+			C: C(Is("ab"), Ds(1)),
+			D: C(Ds(1), Rs(2), Ds(1)),
 		},
 		//     A:Ia R2          I/I
 		//B:Z Z R2    C
 		//        D
 		TransformCase{
-			A: Ops{I("a"), R(2)},
-			B: Ops{Z(), Z(), R(2)},
-			C: Ops{R(3)},
-			D: Ops{I("a"), R(2)},
+			A: C(Is("a"), Rs(2)),
+			B: C(Zs(), Zs(), Rs(2)),
+			C: C(Rs(3)),
+			D: C(Is("a"), Rs(2)),
 		},
 		//     A:Ia R2          I/I
 		//B:R1 I6 R1    C
 		//        D
 		TransformCase{
-			A: Ops{I("a"), R(2)},
-			B: Ops{R(1), I("6"), R(1)},
-			C: Ops{R(2), I("6"), R(1)},
-			D: Ops{I("a"), R(3)},
+			A: C(Is("a"), Rs(2)),
+			B: C(Rs(1), Is("6"), Rs(1)),
+			C: C(Rs(2), Is("6"), Rs(1)),
+			D: C(Is("a"), Rs(3)),
 		},
 		//     A:I0 R3          I/I
 		//B:R2 I6 R1    C
 		//        D
 		TransformCase{
-			A: Ops{I("0"), R(3)},
-			B: Ops{R(2), I("6"), R(1)},
-			C: Ops{R(3), I("6"), R(1)},
-			D: Ops{I("0"), R(4)},
+			A: C(Is("0"), Rs(3)),
+			B: C(Rs(2), Is("6"), Rs(1)),
+			C: C(Rs(3), Is("6"), Rs(1)),
+			D: C(Is("0"), Rs(4)),
 		},
 	}
 	doTransformTable(t, table)

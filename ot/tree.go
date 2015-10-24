@@ -3,6 +3,8 @@ package ot
 import (
 	"fmt"
 	"strings"
+
+	"github.com/juju/errors"
 )
 
 type TreeTag int
@@ -47,7 +49,7 @@ func (t Tree) String() string {
 	case t.Tag == T_BRANCH:
 		return t.Kids.String()
 	default:
-		panic(fmt.Errorf("String(): tree with unknown tag, t: %#v", t))
+		panic(errors.Errorf("String(): tree with unknown tag, t: %#v", t))
 	}
 }
 
@@ -61,6 +63,8 @@ func (ts Trees) String() string {
 
 func (t Tree) Len() int {
 	switch {
+	case t.Tag == T_NIL:
+		return 0 // BUG(mistone): needed for op.IsZero(), but is it correct?
 	case t.Tag == T_LEAF:
 		// return len(t.Body)
 		return 1
@@ -68,7 +72,7 @@ func (t Tree) Len() int {
 		// SUBTLE(mistone): Tree nodes take up 1 space for transformation purposes -- they act like individual letters from a countably infinite alphabet, which can be recursed into.
 		return 1
 	default:
-		panic(fmt.Errorf("Len(): tree with unkown tag, t: %#v", t))
+		panic(errors.Errorf("Len(): tree with unknown tag, t: %#v", t))
 	}
 }
 
@@ -135,13 +139,13 @@ func (t Tree) SplitAt(n int) (Tree, Tree, error) {
 	case t.IsBranch():
 		return t.splitAtBranch(n)
 	default:
-		return Zt(), Zt(), fmt.Errorf("Tree.SplitAt bad tag, t: %s, n: %d", t.String(), n)
+		return Zt(), Zt(), errors.Errorf("Tree.SplitAt bad tag, t: %s, n: %d", t.String(), n)
 	}
 }
 
 // func (t Tree) splitAtLeaf(n int) (Tree, Tree, error) {
 // 	if !t.IsLeaf() || n > len(t.Body) {
-// 		return Tree{}, Tree{}, fmt.Errorf("Tree.splitAtLeaf failed, t: %s, n: %d", t.String(), n)
+// 		return Tree{}, Tree{}, errors.Errorf("Tree.splitAtLeaf failed, t: %s, n: %d", t.String(), n)
 // 	}
 // 	l, r := CloneRunes(t.Body[:n]), CloneRunes(t.Body[n:])
 // 	return Leaf(l), Leaf(r), nil
@@ -150,7 +154,7 @@ func (t Tree) SplitAt(n int) (Tree, Tree, error) {
 
 func (t Tree) splitAtBranch(n int) (Tree, Tree, error) {
 	if !t.IsBranch() || n > len(t.Kids) {
-		return Tree{}, Tree{}, fmt.Errorf("Tree.splitAtBranch failed, t: %s, n: %d", t.String(), n)
+		return Tree{}, Tree{}, errors.Errorf("Tree.splitAtBranch failed, t: %s, n: %d", t.String(), n)
 	}
 	l, r := t.Kids[:n].Clone(), t.Kids[n:].Clone()
 	return Branch(l), Branch(r), nil
@@ -158,7 +162,7 @@ func (t Tree) splitAtBranch(n int) (Tree, Tree, error) {
 
 func (ts Trees) SplitAt(n int) (Trees, Trees, error) {
 	if n > len(ts) {
-		return nil, nil, fmt.Errorf("Trees.SplitAt failed, t: %s, n: %d", ts.String(), n)
+		return nil, nil, errors.Errorf("Trees.SplitAt failed, t: %s, n: %d", ts.String(), n)
 	}
 	l, r := ts[:n].Clone(), ts[n:].Clone()
 	return l, r, nil
@@ -200,7 +204,14 @@ func (z *Zipper) Skip(n int) {
 	z.ns[len(z.ns)-1] = z.Index() + n
 }
 
+func (z *Zipper) AtRoot() bool {
+	return len(z.ns) == 0
+}
+
 func (z *Zipper) Current() *Tree {
+	if z.AtRoot() {
+		return z.ts[0]
+	}
 	return &z.Parent().Kids[z.Index()]
 }
 
