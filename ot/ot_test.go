@@ -206,6 +206,77 @@ func TestConcurrent(t *testing.T) {
 	doTable(t, table)
 }
 
+type ShortenOpCase struct {
+	A Op
+	N int
+	C Op
+	E error
+}
+
+func doShortenOpTable(t *testing.T, cases []ShortenOpCase) {
+	for idx, x := range cases {
+		t.Logf("shortenOp %d, shortening A: %s, N: %d, -> C: %s, E: %s", idx, x.A.String(), x.N, x.C.String(), x.E)
+		c, e := shortenOp(x.A, x.N)
+		if !reflect.DeepEqual(c, x.C) {
+			t.Fatalf("shortenOp %d failed; [%s %s] -> [%s %s], %s != expected C [%s]", idx, x.A, x.N, x.C, x.E, c)
+		}
+		if !reflect.DeepEqual(e, x.E) {
+			t.Fatalf("shortenOp %d failed; [%s %s] -> [%s %s], %s != expected E [%s]", idx, x.A, x.N, x.C, x.E, e)
+		}
+	}
+}
+
+func TestShortenOp(t *testing.T) {
+	table := []ShortenOpCase{
+		ShortenOpCase{
+			A: R(1),
+			N: 1,
+			C: Z(),
+			E: nil,
+		},
+	}
+
+	doShortenOpTable(t, table)
+}
+
+type ShortenOpsCase struct {
+	A Op
+	B Op
+	C Op
+	D Op
+	E error
+}
+
+func doShortenOpsTable(t *testing.T, cases []ShortenOpsCase) {
+	for idx, x := range cases {
+		t.Logf("shorten %d, shortening A: %s, B: %s, -> C: %s, D: %s, E: %s", idx, x.A.String(), x.B.String(), x.C.String(), x.D.String(), x.E)
+		c, d, e := shortenOps(x.A, x.B)
+		if !reflect.DeepEqual(c, x.C) {
+			t.Fatalf("shorten %d failed; [%s %s] -> [%s %s], %s != expected C [%s]", idx, x.A, x.B, x.C, x.D, x.E, c)
+		}
+		if !reflect.DeepEqual(d, x.D) {
+			t.Fatalf("shorten %d failed; [%s %s] -> [%s %s], %s != expected D [%s]", idx, x.A, x.B, x.C, x.D, x.E, d)
+		}
+		if !reflect.DeepEqual(e, x.E) {
+			t.Fatalf("shorten %d failed; [%s %s] -> [%s %s], %s != expected E [%s]", idx, x.A, x.B, x.C, x.D, x.E, e)
+		}
+	}
+}
+
+func TestShortenOps(t *testing.T) {
+	table := []ShortenOpsCase{
+		ShortenOpsCase{
+			A: R(1),
+			B: It(Leaf('a')),
+			C: Z(),
+			D: Z(),
+			E: nil,
+		},
+	}
+
+	doShortenOpsTable(t, table)
+}
+
 type ComposeCase struct {
 	A [2]Ops
 	B Ops
