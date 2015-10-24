@@ -11,7 +11,8 @@ import (
 )
 
 func TestJSON(t *testing.T) {
-	c1 := Ops{D(1), R(1), I("hi")}
+	c1 := Ops{D(1), R(1)}
+	c1 = append(c1, I("hi")...)
 	j1, err := json.Marshal(c1)
 	if err != nil {
 		t.Fatalf("unable to marshal c1 to json, err %q", err)
@@ -228,7 +229,7 @@ func TestCompose(t *testing.T) {
 	table := []ComposeCase{
 		ComposeCase{
 			A: [2]Ops{
-				Ops{I("a")},
+				I("a"),
 				Ops{R(1), I("b")},
 			},
 			B: Ops{I("ab")},

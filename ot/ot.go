@@ -32,37 +32,11 @@ package ot
 import (
 	"bytes"
 	"crypto/rand"
-	"encoding/json"
 	"fmt"
 	"math/big"
-	"strings"
 	"sync"
 	"unicode/utf8"
 )
-
-type Tag int
-
-const (
-	O_NIL Tag = iota
-	O_INSERT
-	O_RETAIN
-	O_DELETE
-	O_WITH
-)
-
-type Op struct {
-	// Tag indicates what kind of Op we have
-	Tag Tag
-
-	// Len is either delete-len (if negative) or retain-len (if positive)
-	Size int
-
-	// Body is the text to be inserted
-	Body []rune
-
-	// Kids are the child-ops for parent With operations
-	Kids Ops
-}
 
 func CloneRunes(body []rune) []rune {
 	if len(body) == 0 {
@@ -71,69 +45,6 @@ func CloneRunes(body []rune) []rune {
 	ret := make([]rune, len(body))
 	copy(ret, body)
 	return ret
-}
-
-func (o Op) Clone() Op {
-	return Op{
-		Tag:  o.Tag,
-		Size: o.Size,
-		Body: CloneRunes(o.Body),
-		Kids: o.Kids.Clone(),
-	}
-}
-
-func (o *Op) IsRetain() bool {
-	if o == nil {
-		return false
-	}
-	return o.Tag == O_RETAIN && o.Size > 0
-}
-
-func (o *Op) IsDelete() bool {
-	if o == nil {
-		return false
-	}
-	return o.Tag == O_DELETE && o.Size < 0
-}
-
-func (o *Op) IsInsert() bool {
-	if o == nil {
-		return false
-	}
-	return o.Tag == O_INSERT && o.Size == 0 && len(o.Body) > 0
-}
-
-func (o *Op) IsWith() bool {
-	if o == nil {
-		return false
-	}
-	return o.Tag == O_WITH
-}
-
-func (o *Op) IsZero() bool {
-	if o == nil {
-		return true
-	}
-	return o.Tag == O_NIL && o.Size == 0 && len(o.Body) == 0 && len(o.Kids) == 0
-}
-
-// Len returns the tree-len of o; i.e., the number of tree nodes affected by o.
-func (o *Op) Len() int {
-	switch {
-	case o.IsZero():
-		return 0
-	case o.IsDelete():
-		return -o.Size
-	case o.IsRetain():
-		return o.Size
-	case o.IsInsert():
-		return len(o.Body)
-	case o.IsWith():
-		// SUBTLE(mistone): W ops have tree-length 1, due to their interaction with D + R ops in compose1().
-		return 1
-	default:
-		panic(fmt.Sprintf("len got bad op, %s", o.String()))
-	}
 }
 
 func AsRunes(s string) []rune {
@@ -152,178 +63,6 @@ func AsString(rs []rune) string {
 	return buf.String()
 }
 
-func (o *Op) String() string {
-	switch {
-	case o == nil:
-		return "N"
-	case o.IsDelete():
-		return fmt.Sprintf("D%d", -o.Size)
-	case o.IsRetain():
-		return fmt.Sprintf("R%d", o.Size)
-	case o.IsInsert():
-		return fmt.Sprintf("I%s", AsString(o.Body))
-	case o.IsZero():
-		return "Z"
-	case o.IsWith():
-		return fmt.Sprintf("W%s", o.Kids)
-	default:
-		return fmt.Sprintf("E%#v", o)
-	}
-}
-
-type Ops []Op
-
-func (os Ops) Clone() Ops {
-	if len(os) == 0 {
-		return nil
-	}
-	os2 := make(Ops, len(os))
-	for i, op := range os {
-		os2[i] = op.Clone()
-	}
-	return os2
-}
-
-func (os Ops) String() string {
-	if len(os) > 0 {
-		strs := []string{}
-		for _, o := range os {
-			strs = append(strs, o.String())
-		}
-		return fmt.Sprintf("[%s]", strings.Join(strs, " "))
-	} else {
-		return "[]"
-	}
-}
-
-func (os Ops) First() *Op {
-	return &os[0]
-}
-
-func (os Ops) Last() *Op {
-	return &os[len(os)-1]
-}
-
-func (os Ops) Rest() Ops {
-	return os[1:]
-}
-
-func (os Ops) Empty() bool {
-	return len(os) == 0
-}
-
-func (op *Op) extendBody(rhs []rune) {
-	lhs := op.Body
-	op.Body = make([]rune, len(lhs)+len(rhs))
-	copy(op.Body, lhs)
-	copy(op.Body[len(lhs):], rhs)
-}
-
-func (os *Ops) insertPenultimate(op Op) {
-	rhs := *os
-	rlen := len(rhs)
-	lhs := make(Ops, rlen+1)
-	copy(lhs, rhs[:rlen-1])
-	lhs[rlen-1] = op
-	lhs[rlen] = rhs[rlen-1]
-	*os = lhs
-}
-
-func (os *Ops) insertUltimate(op Op) {
-	rhs := *os
-	lhs := make(Ops, len(rhs))
-	copy(lhs, rhs)
-	lhs = append(lhs, op)
-	*os = lhs
-}
-
-func (os *Ops) Insert(body []rune) {
-	ops := *os
-	olen := len(ops)
-	switch {
-	case len(body) == 0:
-		break
-	case olen > 0 && os.Last().IsInsert():
-		ops.Last().extendBody(body)
-	case olen > 0 && os.Last().IsDelete():
-		if olen > 1 && ops[olen-2].IsInsert() {
-			(&ops[olen-2]).extendBody(body)
-		} else {
-			os.insertPenultimate(Ir(body))
-		}
-	default:
-		os.insertUltimate(Ir(body))
-	}
-}
-
-func (os *Ops) Retain(size int) {
-	switch {
-	case size == 0:
-		return
-	case len(*os) > 0 && os.Last().IsRetain():
-		os.Last().Size += size
-	default:
-		os.insertUltimate(R(size))
-	}
-}
-
-func (os *Ops) Delete(size int) {
-	ops := *os
-	olen := len(ops)
-	if size == 0 {
-		return
-	}
-	if size > 0 {
-		size = -size
-	}
-	if olen > 0 && ops[olen-1].IsDelete() {
-		ops[olen-1].Size += size
-	} else {
-		os.insertUltimate(D(size))
-	}
-}
-
-func (os *Ops) With(kids Ops) {
-	os.insertUltimate(W(kids)) // BUG(mistone): should With() fold into previous With ops?
-}
-
-func (o Op) MarshalJSON() ([]byte, error) {
-	switch {
-	case o.IsDelete() || o.IsRetain():
-		return json.Marshal(o.Size)
-	case o.IsInsert():
-		return json.Marshal(AsString(o.Body))
-	case o.IsWith():
-		return json.Marshal(o.Kids)
-	default:
-		return nil, fmt.Errorf("error: MarshalJSON() got bad op, o: %s", o.String())
-	}
-}
-
-func (o *Op) UnmarshalJSON(data []byte) error {
-	switch {
-	case len(data) == 0:
-		return fmt.Errorf("illegal op: %q", data)
-	case data[0] == '"':
-		var s string
-		if err := json.Unmarshal(data, &s); err != nil {
-			return err
-		}
-		o.Body = AsRunes(s)
-		o.Tag = O_INSERT
-		return nil
-	case data[0] == '[':
-		o.Tag = O_WITH
-		return json.Unmarshal(data, &o.Kids)
-	case data[0] == '-':
-		o.Tag = O_DELETE
-		return json.Unmarshal(data, &o.Size)
-	default:
-		o.Tag = O_RETAIN
-		return json.Unmarshal(data, &o.Size)
-	}
-}
-
 func min(a, b int) int {
 	if a < b {
 		return a
@@ -332,15 +71,91 @@ func min(a, b int) int {
 	}
 }
 
-func shorten(o Op, nl int) (Op, error) {
+func Apply(o Op, t *Tree) error {
+	if !o.IsWith() || !t.IsBranch() {
+		return fmt.Errorf("Apply failed; o: %s, t: %s", o.String(), t.String())
+	}
+
+	tz := NewZipper(t, 10)
+
+	// olen := len(o.Kids)
+	for _, o := range o.Kids {
+		switch {
+		case o.IsZero():
+			continue
+		case o.IsInsert():
+			tz.Insert(o.Body.Clone())
+		case o.IsRetain():
+			tz.Retain(o.Len())
+		case o.IsDelete():
+			tz.Delete(o.Len())
+		case o.IsWith():
+			err := Apply(o, tz.Current())
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// func apply1(o Op, t Tree) (Tree, error) {
+// 	olen := len(os)
+// 	tlen := len(ts)
+// 	o, orest := o
+// 	switch {
+// 	case o.IsWith() && t.IsBranch():
+// 		ts, err := Apply(o.Kids, t.Kids)
+// 		if err != nil {
+// 			return Tree{}, err
+// 		}
+// 		return Branch(ts), nil
+// 	case o.IsRetain()
+// 	}
+// }
+
+func shortenTrees(ts Trees, nl int) (Trees, error) {
+	ts = ts.Clone()
+	switch {
+	case nl > len(ts):
+		return nil, fmt.Errorf("shortenTrees fail, ts: %s, nl: %d", ts.String(), nl)
+	default:
+		return ts[nl:], nil
+	}
+}
+
+func shortenOpTrees(a Op, b Trees) (Op, Trees, error) {
+	var a2 Op
+	var b2 Trees
+	var err error
+
+	la := a.Len()
+	lb := b.Len()
+
+	switch {
+	case la == lb:
+		return Z(), nil, nil
+	case la > lb:
+		a2, err = shortenOp(a, lb)
+		return a2, nil, err
+	case la <= lb:
+		b2, err = shortenTrees(b, la)
+		return Z(), b2, err
+	}
+	return Z(), nil, fmt.Errorf("ot.shortenOpTrees() -- unreachable case, a: %s, b: %s", a.String(), b.String())
+}
+
+func shortenOp(o Op, nl int) (Op, error) {
 	o = o.Clone()
 	switch {
 	case o.IsRetain():
 		o.Size -= nl
 	case o.IsDelete():
 		o.Size += nl
-	case o.IsInsert():
-		o.Body = o.Body[nl:]
+	// case o.IsInsertLeaf():
+	// 	o.Body.Leaf = o.Body.Body[nl:]
+	case o.IsInsertBranch():
+		o.Body.Kids = o.Body.Kids[nl:]
 	case o.IsWith():
 		o.Kids = o.Kids[nl:] // BUG(mistone): how to shorten With ops?
 	default:
@@ -358,13 +173,13 @@ func shortenOps(a Op, b Op) (Op, Op, error) {
 
 	switch {
 	case la == lb:
-		return R(0), R(0), nil
+		return Z(), Z(), nil
 	case la > lb:
-		a2, err = shorten(a, lb)
-		return a2, R(0), err
+		a2, err = shortenOp(a, lb)
+		return a2, Z(), err
 	case la <= lb:
-		b2, err = shorten(b, la)
-		return R(0), b2, err
+		b2, err = shortenOp(b, la)
+		return Z(), b2, err
 	}
 	return Z(), Z(), fmt.Errorf("ot.shortenOps() -- unreachable case, a: %s, b: %s", a, b)
 }
@@ -395,6 +210,7 @@ func compose1(as, bs Ops) (Ops, error) {
 	ret := Ops{}
 	rest := Ops{}
 	hcs := Ops{}
+	oc := Op{}
 	var err error
 
 	a := 0
@@ -455,7 +271,11 @@ func compose1(as, bs Ops) (Ops, error) {
 		case oa.IsRetain() && ob.IsWith():
 			// TODO
 		case oa.IsInsert() && ob.IsRetain():
-			ret = append(ret, Ir(oa.Body[:minlen]))
+			oc, err = shortenOp(oa, minlen)
+			if err != nil {
+				break
+			}
+			ret = append(ret, oc)
 		case oa.IsInsert() && ob.IsDelete():
 			// insertion then deletion cancels
 		case oa.IsInsert() && ob.IsWith():
@@ -466,11 +286,18 @@ func compose1(as, bs Ops) (Ops, error) {
 			// TODO
 		case oa.IsWith() && ob.IsDelete():
 			// TODO
+		default:
+			err = fmt.Errorf("compose1 error: impossible case\n\tas: %s\n\tbs: %s", as.String(), bs.String())
 		}
+		if err != nil {
+			break
+		}
+
 		hcs, err = compose1(has, hbs)
 		if err != nil {
 			break
 		}
+
 		ret = append(ret, hcs...)
 	}
 	return ret, err
@@ -635,12 +462,12 @@ func Normalize(os Ops) (Ops, error) {
 type Doc struct {
 	mu sync.Mutex
 	// Current text
-	body []rune
+	body Tree
 }
 
 func NewDoc() *Doc {
 	d := new(Doc)
-	d.body = make([]rune, 0)
+	d.body = Branch(nil)
 	return d
 	// return &Doc{
 	// 	mu:   sync.Mutex{},
@@ -652,54 +479,31 @@ func (d *Doc) Len() int {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	return len(d.body)
+	return d.body.Len()
 }
 
 func (d *Doc) String() string {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	buf := bytes.Buffer{}
-	for _, r := range d.body {
-		buf.WriteRune(r)
-	}
-	return buf.String()
+	// buf := bytes.Buffer{}
+	// for _, r := range d.body {
+	// 	buf.WriteRune(r)
+	// }
+	// return buf.String()
+	return d.body.String()
 }
 
 func (d *Doc) Apply(os Ops) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	os2 := os.Clone()
-	os = os2
-
-	if len(os) == 0 {
-		return
+	body := d.body.Clone()
+	err := Apply(W(os), &body)
+	if err != nil {
+		panic(err)
 	}
-	pos := 0
-	parts := [][]rune{}
-	for _, o := range os {
-		switch {
-		case o.IsDelete():
-			pos += o.Len()
-		case o.IsRetain() && o.Len() > 0:
-			parts = append(parts, d.body[pos:pos+o.Len()])
-			pos += o.Len()
-		case o.IsInsert():
-			parts = append(parts, o.Body)
-		}
-	}
-	size := 0
-	for _, p := range parts {
-		size += len(p)
-	}
-	d.body = make([]rune, size)
-
-	idx := 0
-	for _, p := range parts {
-		copy(d.body[idx:idx+len(p)], p)
-		idx += len(p)
-	}
+	d.body = body
 }
 
 func RandIntn(n int) int {
@@ -738,18 +542,37 @@ func (d *Doc) GetRandomOps(numChars int) Ops {
 	return ops.Clone()
 }
 
-func I(s string) Op {
+func I(s string) Ops {
 	if len(s) == 0 {
-		return Z()
+		return nil
 	}
-	return Op{Tag: O_INSERT, Body: AsRunes(s)}
+	os := make(Ops, utf8.RuneCountInString(s))
+	for i, r := range s {
+		os[i] = Op{Tag: O_INSERT, Body: Leaf(r)}
+	}
+	return os
 }
 
-func Ir(r []rune) Op {
-	if len(r) == 0 {
+func Ic(r rune) Op {
+	return Op{Tag: O_INSERT, Body: Leaf(r)}
+}
+
+func Ir(rs []rune) Ops {
+	if len(rs) == 0 {
+		return nil
+	}
+	os := make(Ops, len(rs))
+	for i, r := range rs {
+		os[i] = Op{Tag: O_INSERT, Body: Leaf(r)}
+	}
+	return os
+}
+
+func It(t Tree) Op {
+	if t.Len() == 0 {
 		return Z()
 	}
-	return Op{Tag: O_INSERT, Body: r}
+	return Op{Tag: O_INSERT, Body: t}
 }
 
 func R(n int) Op {
@@ -782,7 +605,12 @@ func NewInsert(docLen int, pos int, s string) Ops {
 		panic(fmt.Errorf("bad position; insert is out of range; pos: %d, s: %q", pos, s))
 	}
 
-	return Ops{R(pos), I(s), R(docLen - pos)}
+	is := I(s)
+	os := make(Ops, len(is)+2)
+	os[0] = R(pos)
+	copy(os[1:], is)
+	os[len(os)-1] = R(docLen - pos)
+	return os
 }
 
 func NewDelete(docLen int, pos int, length int) Ops {
