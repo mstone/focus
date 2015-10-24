@@ -1,0 +1,20 @@
+= focus(1) Hacking
+Michael Stone <mistone@akamai.com>
+v0.1, 2015-10-24
+:toc:
+:homepage: http://github.com/mstone/focus
+:numbered:
+:sectlinks:
+:icons: font
+
+ifdef::env-github[:outfilesuffix: .adoc]
+
+== HACKING
+
+== TOOLS
+
+[verse]
+godebug
+goconvey
+gometalinter
+git log -L ^:funcname:file
