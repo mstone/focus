@@ -154,6 +154,7 @@ func shortenOpTrees(a Op, b Trees) (Op, Trees, error) {
 	return Z(), nil, errors.Errorf("ot.shortenOpTrees() -- unreachable case, a: %s, b: %s", a.String(), b.String())
 }
 
+// shortenOp returns the prefix of o that compose1 will need to retain.
 func shortenOp(o Op, nl int) (Op, error) {
 	o = o.Clone()
 	switch {
@@ -173,6 +174,7 @@ func shortenOp(o Op, nl int) (Op, error) {
 	return o, nil
 }
 
+// shortenOps returns the suffixes of a and b that compose1 will need to recurse on.
 func shortenOps(a Op, b Op) (Op, Op, error) {
 	var a2, b2 Op
 	var err error
