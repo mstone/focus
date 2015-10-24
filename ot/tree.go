@@ -180,9 +180,10 @@ type Zipper struct {
 	ns []int
 }
 
-func NewZipper(root *Tree, depth int) *Zipper {
-	ts, ns := make([]*Tree, 1, depth), make([]int, 0, depth)
+func NewZipper(root *Tree, index int, depth int) *Zipper {
+	ts, ns := make([]*Tree, 1, depth), make([]int, 1, depth)
 	ts[0] = root
+	ns[0] = index
 	return &Zipper{
 		ts: ts,
 		ns: ns,
@@ -204,15 +205,12 @@ func (z *Zipper) Skip(n int) {
 	z.ns[len(z.ns)-1] = z.Index() + n
 }
 
-func (z *Zipper) AtRoot() bool {
-	return len(z.ns) == 0
-}
-
 func (z *Zipper) Current() *Tree {
-	if z.AtRoot() {
-		return z.ts[0]
+	p, n := z.Parent(), z.Index()
+	if 0 <= n && n < len(p.Kids) {
+		return &z.Parent().Kids[z.Index()]
 	}
-	return &z.Parent().Kids[z.Index()]
+	return nil
 }
 
 func (z *Zipper) Parent() *Tree {
@@ -237,7 +235,11 @@ func (z *Zipper) CanSkip(n int) bool {
 }
 
 func (z *Zipper) HasDown() bool {
-	return len(z.Current().Kids) > 0
+	c := z.Current()
+	if c != nil && len(c.Kids) > 0 {
+		return true
+	}
+	return false
 }
 
 func (z *Zipper) Insert(t Tree) {

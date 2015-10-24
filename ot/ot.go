@@ -86,7 +86,7 @@ func Apply(o Op, t *Tree) error {
 		return errors.Errorf("Apply failed; o: %s, t: %s", o.String(), t.String())
 	}
 
-	tz := NewZipper(t, 10)
+	tz := NewZipper(t, 0, 10)
 
 	// olen := len(o.Kids)
 	for _, o := range o.Kids {
