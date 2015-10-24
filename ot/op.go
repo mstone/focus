@@ -1,7 +1,6 @@
 package ot
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 )
@@ -310,41 +309,4 @@ func (os *Ops) Delete(size int) {
 
 func (os *Ops) With(kids Ops) {
 	os.insertUltimate(W(kids)) // BUG(mistone): should With() fold into previous With ops?
-}
-
-func (o Op) MarshalJSON() ([]byte, error) {
-	switch {
-	case o.IsDelete() || o.IsRetain():
-		return json.Marshal([]int{int(o.Tag), o.Size})
-	case o.IsInsert():
-		return json.Marshal([]interface{}{o.Tag, o.Body})
-	case o.IsWith():
-		return json.Marshal([]interface{}{o.Tag, o.Kids})
-	default:
-		return nil, fmt.Errorf("error: MarshalJSON() got bad op, o: %s", o.String())
-	}
-}
-
-func (o *Op) UnmarshalJSON(data []byte) error {
-	switch {
-	case len(data) == 0:
-		return fmt.Errorf("illegal op: %q", data)
-	case data[0] == '"':
-		var s string
-		if err := json.Unmarshal(data, &s); err != nil {
-			return err
-		}
-		o.Body = Leaf(AsRunes(s)[0])
-		o.Tag = O_INSERT
-		return nil
-	case data[0] == '[':
-		o.Tag = O_WITH
-		return json.Unmarshal(data, &o.Kids)
-	case data[0] == '-':
-		o.Tag = O_DELETE
-		return json.Unmarshal(data, &o.Size)
-	default:
-		o.Tag = O_RETAIN
-		return json.Unmarshal(data, &o.Size)
-	}
 }
