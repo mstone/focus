@@ -223,6 +223,7 @@ func compose1(as, bs Ops) (Ops, error) {
 	hcs := Ops{}
 	oc := Op{}
 	var err error
+	var sa, sb Op
 
 	a := 0
 	b := 0
@@ -260,7 +261,7 @@ func compose1(as, bs Ops) (Ops, error) {
 		oa := as[a]
 		ob := bs[b]
 
-		sa, sb, err := shortenOps(oa, ob)
+		sa, sb, err = shortenOps(oa, ob)
 		if err != nil {
 			break
 		}
