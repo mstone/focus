@@ -133,27 +133,6 @@ func shortenTrees(ts Trees, nl int) (Trees, error) {
 	}
 }
 
-func shortenOpTrees(a Op, b Trees) (Op, Trees, error) {
-	var a2 Op
-	var b2 Trees
-	var err error
-
-	la := a.Len()
-	lb := b.Len()
-
-	switch {
-	case la == lb:
-		return Z(), nil, nil
-	case la > lb:
-		a2, err = shortenOp(a, lb)
-		return a2, nil, errors.Trace(err)
-	case la <= lb:
-		b2, err = shortenTrees(b, la)
-		return Z(), b2, errors.Trace(err)
-	}
-	return Z(), nil, errors.Errorf("ot.shortenOpTrees() -- unreachable case, a: %s, b: %s", a.String(), b.String())
-}
-
 // shortenOp returns the prefix of o that compose1 will need to retain.
 func shortenOp(o Op, nl int) (Op, error) {
 	o = o.Clone()
