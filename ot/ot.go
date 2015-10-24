@@ -162,8 +162,11 @@ func shortenOp(o Op, nl int) (Op, error) {
 		o.Size -= nl
 	case o.IsDelete():
 		o.Size += nl
-	// case o.IsInsertLeaf():
-	// 	o.Body.Leaf = o.Body.Body[nl:]
+	case o.IsInsertLeaf():
+		if nl != 1 {
+			return Z(), errors.Errorf("shorten fail; tried to split atomic leaf")
+		}
+		return o, nil
 	case o.IsInsertBranch():
 		o.Body.Kids = o.Body.Kids[nl:]
 	case o.IsWith():
@@ -233,14 +236,14 @@ func compose1(as, bs Ops) (Ops, error) {
 	switch {
 	case a == la && b == lb:
 		break
-	case a == la:
-		ret = bs.Clone()
-	case b == lb:
-		ret = as.Clone()
 	case la > 0 && as[a].IsZero():
 		ret, err = compose1(as[a+1:], bs)
 	case lb > 0 && bs[b].IsZero():
 		ret, err = compose1(as, bs[b+1:])
+	case a == la:
+		ret = bs.Clone()
+	case b == lb:
+		ret = as.Clone()
 	case la > 0 && as[a].IsDelete():
 		// run insertions, then delete, then apply remaining effects
 		rest, err = compose1(as[a+1:], bs)
