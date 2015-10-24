@@ -286,7 +286,7 @@ func doInsertTable(t *testing.T, cases []InsertCase) {
 		a := c.A.Clone()
 		a.Insert(c.B)
 		if !reflect.DeepEqual(a, c.C) {
-			t.Fatalf("insert %d failed;\n\tA: %s\n\ta: %s\n\tB: %s\n\tC: %s\n\ta: %#v\n\tC: %#v", idx, c.A, a, c.B.String(), c.C, a, c.C)
+			t.Fatalf("insert %d failed;\n\tA: %s\n\tB: %s\n\ta: %s\n\tC: %s\n\ta: %#v\n\tC: %#v", idx, c.A, c.B.String(), a, c.C, a, c.C)
 		}
 	}
 }
@@ -295,22 +295,22 @@ func TestInsert(t *testing.T) {
 	table := []InsertCase{
 		InsertCase{
 			A: Ops{},
-			B: AsRuneTree("a"),
+			B: Leaf('a'),
 			C: Is("a"),
 		},
 		InsertCase{
 			A: Is("a"),
-			B: AsRuneTree("b"),
+			B: Leaf('b'),
 			C: Is("ab"),
 		},
 		InsertCase{
 			A: append(Is("a"), D(2)),
-			B: AsRuneTree("b"),
+			B: Leaf('b'),
 			C: append(Is("ab"), D(2)),
 		},
 		InsertCase{
 			A: Ops{D(2)},
-			B: AsRuneTree("a"),
+			B: Leaf('a'),
 			C: append(Is("a"), D(2)),
 		},
 	}
