@@ -285,6 +285,7 @@ func compose1(as, bs Ops) (Ops, error) {
 		case oa.IsInsert() && ob.IsRetain():
 			oc, err = shortenOp(oa, minlen)
 			if err != nil {
+				err = errors.Trace(err)
 				break
 			}
 			ret = append(ret, oc)

@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"reflect"
 	"testing"
+
+	"github.com/juju/errors"
 )
 
 func TestJSON(t *testing.T) {
@@ -287,10 +289,10 @@ func doComposeTable(t *testing.T, cases []ComposeCase) {
 		t.Logf("compose %d, composing A[0]: %s, A[1]: %s, expecting B: %s", idx, c.A[0], c.A[1], c.B)
 		a, err := Compose(c.A[0], c.A[1])
 		if err != nil {
-			t.Errorf("compose %d failed; err: %q", err)
+			t.Fatalf("compose %d failed; err: %s", idx, errors.ErrorStack(err))
 		}
 		if !reflect.DeepEqual(a, c.B) {
-			t.Errorf("compose %d failed; %s -> %s != expected %s", idx, c.A, a, c.B)
+			t.Fatalf("compose %d failed; %s -> %s != expected %s", idx, c.A, a, c.B)
 		}
 	}
 }
