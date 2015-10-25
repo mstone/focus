@@ -4,6 +4,7 @@
 package ot
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"reflect"
@@ -342,6 +343,13 @@ func TestCompose(t *testing.T) {
 			},
 			B: Is("e4x"),
 		},
+		{
+			A: [2]Ops{
+				C(Zs(), Is("c"), Zs()),
+				C(Zs(), Is("e"), Rs(1)),
+			},
+			B: Is("ec"),
+		},
 	}
 
 	doComposeTable(t, table)
@@ -522,10 +530,19 @@ func testOneCompose(t *testing.T) {
 
 	d1 := NewDoc()
 
-	for i := 0; i < 100; i++ {
-		ops := d1.GetRandomOps(4)
+	nOpsPerRound := 2
+	nRounds := 2
+	allOps := make([]Ops, nRounds)
+	allComposedOps := make([]Ops, nRounds)
+	allDocStrings := make([]string, nRounds)
+
+	for i := 0; i < nRounds; i++ {
+		ops := d1.GetRandomOps(nOpsPerRound)
+		allOps[i] = ops
 		d1.Apply(ops)
+		allDocStrings[i] = d1.String()
 		composedOps, err = Compose(composedOps, ops)
+		allComposedOps[i] = composedOps
 		if err != nil {
 			t.Errorf("testOneCompose compose failed, err: %q", err)
 		}
@@ -537,6 +554,9 @@ func testOneCompose(t *testing.T) {
 	s1 := d1.String()
 	s2 := d2.String()
 	if s1 != s2 {
+		for i, o := range allOps {
+			t.Logf("round %d: %s, c: %s, d: %s", i, o.String(), allComposedOps[i].String(), allDocStrings[i])
+		}
 		t.Fatalf("Compose fail: s1 != s2: \n\t%q\n\t%q", s1, s2)
 	}
 }
@@ -577,4 +597,58 @@ func TestRandomTransform(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		testOneTransform(t)
 	}
+}
+
+type ApplyCase struct {
+	A []Ops
+	B string
+}
+
+func opsToString(label string, os []Ops) string {
+	buf := &bytes.Buffer{}
+	fmt.Fprintf(buf, "ops list: %s\n", label)
+	for i, o := range os {
+		fmt.Fprintf(buf, "\ti: %d, o: %s\n", i, o.String())
+	}
+	return buf.String()
+}
+
+func doDocApplyTable(t *testing.T, cases []ApplyCase) {
+	for idx, x := range cases {
+		t.Logf("apply %d, applying", idx)
+		d := NewDoc()
+		for _, o := range x.A {
+			d.Apply(o)
+		}
+		if d.String() != x.B {
+			t.Fatalf("apply %d failed; apply(%s) -> %s != expected %s", idx, opsToString("A: ", x.A), d.String(), x.B)
+		}
+	}
+}
+
+func TestDocApply(t *testing.T) {
+	cases := []ApplyCase{
+		{
+			A: []Ops{
+				C(Zs(), Is("a"), Zs()),
+				C(Rs(1), Is("b"), Zs()),
+			},
+			B: "[a b]",
+		},
+		{
+			A: []Ops{
+				C(Zs(), Is("a"), Zs()),
+				C(Zs(), Is("b"), Rs(1)),
+			},
+			B: "[b a]",
+		},
+		{
+			A: []Ops{
+				C(Is("ab")),
+			},
+			B: "[a b]",
+		},
+	}
+
+	doDocApplyTable(t, cases)
 }

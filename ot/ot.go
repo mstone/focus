@@ -474,7 +474,7 @@ func (d *Doc) Len() int {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	return d.body.Len()
+	return len(d.body.Kids)
 }
 
 func (d *Doc) String() string {

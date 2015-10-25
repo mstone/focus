@@ -51,4 +51,27 @@ func TestZipperInsert(t *testing.T) {
 	if z.HasDown() {
 		t.Fatalf("leaf has kids")
 	}
+
+	z.Delete(1)
+
+	// back to square emtpy root
+	if z.Parent() != &root {
+		t.Fatalf("parent != root")
+	}
+
+	if z.Index() != 0 {
+		t.Fatalf("index != 0")
+	}
+
+	if z.Current() != nil {
+		t.Fatalf("current != nil")
+	}
+
+	if z.Depth() != 1 {
+		t.Fatalf("depth != 1")
+	}
+
+	if z.HasDown() {
+		t.Fatalf("kids != nil")
+	}
 }
