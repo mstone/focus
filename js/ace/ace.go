@@ -110,7 +110,7 @@ func (a *Adapter) Recv(ops ot.Ops) {
 			continue
 		case op.IsInsert():
 			rowcol := NewRowCol(a.doc, pos)
-			alert.String(fmt.Sprintf("insert(%d, %q)", pos, ot.AsString(op.Body)))
+			alert.String(fmt.Sprintf("insert(%d, %q)", pos, op.Body.String()))
 			// alert.JSON(rowcol)
 			a.doc.Insert(rowcol, ot.AsString(op.Body))
 			pos += op.Len()

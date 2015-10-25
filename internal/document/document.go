@@ -4,6 +4,7 @@
 package document
 
 import (
+	"github.com/juju/errors"
 	log "gopkg.in/inconshreveable/log15.v2"
 
 	im "github.com/mstone/focus/internal/msgs"
@@ -48,7 +49,12 @@ func New(srvr chan interface{}, store chan interface{}, name string) (chan inter
 		d.storeid = respLoad.StoreId
 		d.hist = respLoad.History
 		for _, ops := range d.hist {
-			d.comp = ot.Compose(d.comp, ops)
+			comp, err := ot.Compose(d.comp, ops)
+			if err != nil {
+				log.Error("unable to compose doc hist", "err", err)
+				return nil, err
+			}
+			d.comp = comp
 		}
 	} else {
 		repl := make(chan im.Storedocresp, 1)
@@ -76,31 +82,35 @@ func (d *doc) Body() string {
 func (d *doc) openDescription(fd int, clientRev int, conn chan interface{}) {
 	d.conns[conn] = struct{}{}
 
+	// if serverRev < rev, panic?
+	serverRev := len(d.hist)
+	opsForClient := ot.Ops{}
+	var err error
+
+	if clientRev == 0 {
+		opsForClient = d.comp.Clone()
+	} else {
+		if clientRev < serverRev {
+			opsForClient, err = ot.ComposeAll(d.hist[clientRev : serverRev-1])
+		}
+	}
+
 	m := im.Openresp{
-		Err:  nil,
+		Err:  err,
 		Doc:  d.msgs,
 		Fd:   fd,
 		Name: d.name,
 	}
 	conn <- m
 
-	// if serverRev < rev, panic?
-	serverRev := len(d.hist)
-	opsForClient := ot.Ops{}
-	if clientRev == 0 {
-		opsForClient = d.comp.Clone()
-	} else {
-		if clientRev < serverRev {
-			opsForClient = ot.ComposeAll(d.hist[clientRev : serverRev-1])
+	if err == nil {
+		m2 := im.Write{
+			Doc: d.msgs,
+			Rev: serverRev,
+			Ops: opsForClient, // danger; commutativity violation?
 		}
+		conn <- m2
 	}
-
-	m2 := im.Write{
-		Doc: d.msgs,
-		Rev: serverRev,
-		Ops: opsForClient, // danger; commutativity violation?
-	}
-	conn <- m2
 }
 
 func (d *doc) readLoop() {
@@ -117,16 +127,19 @@ func (d *doc) readLoop() {
 				Rev:  len(d.hist),
 			}
 		case im.Write:
-			rev, ops := d.transform(v.Rev, v.Ops.Clone())
+			// BUG(mistone): need to figure out how to handle transform errors!
+			rev, ops, _ := d.transform(v.Rev, v.Ops.Clone())
 			// BUG(mistone): need to figure out how to handle store write errors!
-			d.record(v.Conn, rev, ops)
+			_ = d.record(v.Conn, rev, ops)
 			// log15.Info("recv", "obj", "doc", "rev", v.Rev, "hash", v.Hash, "ops", v.Ops, "docrev", len(d.hist), "dochist", d.Body(), "nrev", rev, "tops", ops)
 			d.broadcast(v.Conn, rev, ops)
 		}
 	}
 }
 
-func (d *doc) transform(rev int, clientOps ot.Ops) (int, ot.Ops) {
+func (d *doc) transform(rev int, clientOps ot.Ops) (int, ot.Ops, error) {
+	var err error
+
 	// extract concurrent ops
 	concurrentServerOps := []ot.Ops{}
 	if rev < len(d.hist) {
@@ -144,7 +157,10 @@ func (d *doc) transform(rev int, clientOps ot.Ops) (int, ot.Ops) {
 	// forServer, _ := ot.Transform(clientOps, serverOps)
 
 	for _, concurrentOp := range concurrentServerOps {
-		clientOps2, _ := ot.Transform(clientOps, concurrentOp)
+		clientOps2, _, err := ot.Transform(clientOps, concurrentOp)
+		if err != nil {
+			return 0, nil, errors.Trace(err)
+		}
 		clientOps = clientOps2.Clone()
 	}
 	forServer := clientOps
@@ -153,11 +169,14 @@ func (d *doc) transform(rev int, clientOps ot.Ops) (int, ot.Ops) {
 	d.hist = append(d.hist, forServer)
 
 	// update composed ops for new conns
-	d.comp = ot.Compose(d.comp, forServer)
+	d.comp, err = ot.Compose(d.comp, forServer)
+	if err != nil {
+		return 0, nil, errors.Trace(err)
+	}
 
 	rev = len(d.hist)
 
-	return rev, forServer
+	return rev, forServer, nil
 }
 
 func (d *doc) record(conn chan interface{}, rev int, ops ot.Ops) error {
