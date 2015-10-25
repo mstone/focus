@@ -220,6 +220,7 @@ func doShortenOpTable(t *testing.T, cases []ShortenOpCase) {
 	for idx, x := range cases {
 		t.Logf("shortenOp %d, shortening A: %s, N: %d, -> C: %s, E: %s", idx, x.A.String(), x.N, x.C.String(), x.E)
 		c, e := shortenOp(x.A, x.N)
+		t.Logf("shortenOp %d, got %+v, %+v", idx, c, e)
 		if !reflect.DeepEqual(c, x.C) {
 			t.Fatalf("shortenOp %d failed; [%s %s] -> [%s %s], %s != expected C [%s]", idx, x.A, x.N, x.C, x.E, c)
 		}
@@ -530,8 +531,8 @@ func testOneCompose(t *testing.T) {
 
 	d1 := NewDoc()
 
-	nOpsPerRound := 2
-	nRounds := 2
+	nOpsPerRound := 4
+	nRounds := 8
 	allOps := make([]Ops, nRounds)
 	allComposedOps := make([]Ops, nRounds)
 	allDocStrings := make([]string, nRounds)

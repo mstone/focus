@@ -242,6 +242,7 @@ func (z *Zipper) HasDown() bool {
 	return false
 }
 
+// Insert inserts t to the right of the current caret but does not move the caret.
 func (z *Zipper) Insert(t Tree) {
 	p, n := z.Parent(), z.Index()
 	ks := p.Kids

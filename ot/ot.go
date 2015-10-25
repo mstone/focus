@@ -94,6 +94,7 @@ func Apply(o Op, t *Tree) error {
 			continue
 		case o.IsInsert():
 			tz.Insert(o.Body.Clone())
+			tz.Skip(1)
 		case o.IsRetain():
 			tz.Retain(o.Len())
 		case o.IsDelete():
@@ -108,37 +109,19 @@ func Apply(o Op, t *Tree) error {
 	return nil
 }
 
-// func apply1(o Op, t Tree) (Tree, error) {
-// 	olen := len(os)
-// 	tlen := len(ts)
-// 	o, orest := o
-// 	switch {
-// 	case o.IsWith() && t.IsBranch():
-// 		ts, err := Apply(o.Kids, t.Kids)
-// 		if err != nil {
-// 			return Tree{}, errors.Trace(err)
-// 		}
-// 		return Branch(ts), nil
-// 	case o.IsRetain()
-// 	}
-// }
-
-func shortenTrees(ts Trees, nl int) (Trees, error) {
-	ts = ts.Clone()
-	switch {
-	case nl > len(ts):
-		return nil, errors.Errorf("shortenTrees fail, ts: %s, nl: %d", ts.String(), nl)
-	default:
-		return ts[nl:], nil
-	}
-}
-
 // shortenOp returns the prefix of o that compose1 will need to retain.
 func shortenOp(o Op, nl int) (Op, error) {
 	o = o.Clone()
 	switch {
 	case o.IsRetain():
-		o.Size -= nl
+		switch {
+		case o.Size > nl:
+			o.Size -= nl
+		case o.Size == nl:
+			return Z(), nil
+		default:
+			return Z(), errors.Errorf("shorten fail; nl > retain size; nl: %d, o: %s", nl, o.String())
+		}
 	case o.IsDelete():
 		o.Size += nl
 	case o.IsInsertLeaf():
