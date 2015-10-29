@@ -299,14 +299,6 @@ func doComposeTable(t *testing.T, cases []ComposeCase) {
 	}
 }
 
-func C(os ...Ops) Ops {
-	ret := Ops{}
-	for _, o := range os {
-		ret = append(ret, o...)
-	}
-	return ret
-}
-
 func TestCompose(t *testing.T) {
 	table := []ComposeCase{
 		{

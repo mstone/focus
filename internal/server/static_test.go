@@ -97,26 +97,27 @@ func TestStatic(t *testing.T) {
 			recv(i)
 		}
 	}
-	I := ot.I
-	D := ot.D
-	R := ot.R
+	I := ot.Is
+	D := ot.Ds
+	R := ot.Rs
+	C := ot.C
 	_ = recvFlight
 	_ = I
 	_ = D
 	_ = R
 
-	send(0, ot.Ops{R(0), I("4"), R(0)})
-	send(0, ot.Ops{R(0), I("0"), R(1)})
-	send(0, ot.Ops{R(1), R(0), R(1)})
-	send(1, ot.Ops{R(0), I("6"), R(0)})
-	send(1, ot.Ops{R(0), D(1), R(0)})
-	send(1, ot.Ops{R(0), I("6"), R(0)})
-	send(2, ot.Ops{R(0), I("2"), R(0)})
-	send(2, ot.Ops{R(0), D(1), R(0)})
-	send(2, ot.Ops{R(0), I("0"), R(0)})
-	send(3, ot.Ops{R(0), I("2"), R(0)})
-	send(3, ot.Ops{R(0), D(1), R(0)})
-	send(3, ot.Ops{R(0), I("6"), R(0)})
+	send(0, C(R(0), I("4"), R(0)))
+	send(0, C(R(0), I("0"), R(1)))
+	send(0, C(R(1), R(0), R(1)))
+	send(1, C(R(0), I("6"), R(0)))
+	send(1, C(R(0), D(1), R(0)))
+	send(1, C(R(0), I("6"), R(0)))
+	send(2, C(R(0), I("2"), R(0)))
+	send(2, C(R(0), D(1), R(0)))
+	send(2, C(R(0), I("0"), R(0)))
+	send(3, C(R(0), I("2"), R(0)))
+	send(3, C(R(0), D(1), R(0)))
+	send(3, C(R(0), I("6"), R(0)))
 	// for i := 0; i < 8; i++ {
 	// 	recvFlight()
 	// }
@@ -182,20 +183,21 @@ func TestStaticCommute(t *testing.T) {
 	// *-f-*-g-*   |
 	//  -------    |
 	//     i
-	I := ot.I
-	D := ot.D
-	R := ot.R
+	I := ot.Is
+	D := ot.Ds
+	R := ot.Rs
+	C := ot.C
 
-	a := ot.Ops{R(1), D(1), R(1), I("f"), R(1)}
-	b := ot.Ops{I("1"), D(2), R(2)}
-	c := ot.Ops{R(3), I("6"), R(1)}
-	d := ot.Ops{R(2), I("6"), R(2)}
-	e := ot.Ops{R(1), I("6"), R(2)}
-	f := ot.Ops{R(1), D(1), R(2), I("f"), R(1)}
-	g := ot.Ops{I("1"), D(2), R(3)}
-	h := ot.Ops{I("1f"), D(3), R(1)}
-	i := ot.Ops{I("1f"), D(3), R(2)}
-	j := ot.Ops{R(2), I("6"), R(1)}
+	a := C(R(1), D(1), R(1), I("f"), R(1))
+	b := C(I("1"), D(2), R(2))
+	c := C(R(3), I("6"), R(1))
+	d := C(R(2), I("6"), R(2))
+	e := C(R(1), I("6"), R(2))
+	f := C(R(1), D(1), R(2), I("f"), R(1))
+	g := C(I("1"), D(2), R(3))
+	h := C(I("1f"), D(3), R(1))
+	i := C(I("1f"), D(3), R(2))
+	j := C(R(2), I("6"), R(1))
 	_ = a
 	_ = b
 	_ = c
@@ -208,7 +210,10 @@ func TestStaticCommute(t *testing.T) {
 	_ = j
 
 	CEQ := func(l0 string, lhs ot.Ops, l1 string, r1 ot.Ops, l2 string, r2 ot.Ops) {
-		rhs := ot.Compose(r1, r2)
+		rhs, err := ot.Compose(r1, r2)
+		if err != nil {
+			t.Errorf("fail: %s: got err: %s <- C(%s: %s, %s: %s)", l0, err.Error(), l1, r1, l2, r2)
+		}
 		if !reflect.DeepEqual(lhs, rhs) {
 			t.Errorf("fail: %s: %s != %s <- C(%s: %s, %s: %s)", l0, lhs, rhs, l1, r1, l2, r2)
 		} else {
@@ -216,16 +221,25 @@ func TestStaticCommute(t *testing.T) {
 		}
 	}
 	TEQ := func(l0 string, srv2 ot.Ops, l1 string, cln2 ot.Ops, l2 string, cln ot.Ops, l3 string, srv ot.Ops) {
-		fsrv, fcln := ot.Transform(cln, srv)
-		t.Logf("T(%s: %s, %s: %s) -> %s, %s", l2, cln, l3, srv, fsrv, fcln)
+		fsrv, fcln, err := ot.Transform(cln, srv)
+		t.Logf("T(%s: %s, %s: %s) -> %s, %s, %s", l2, cln, l3, srv, fsrv, fcln, err)
+		if err != nil {
+			t.Errorf("T(...): err: %s", err.Error())
+		}
 		if !reflect.DeepEqual(srv2, fsrv) {
 			t.Errorf("fail: srv2 wrong: %s: %s != %s <--- result", l0, srv2, fsrv)
 		}
 		if !reflect.DeepEqual(cln2, fcln) {
 			t.Errorf("fail: cln2 wrong: %s: %s != %s <--- result", l1, cln2, fcln)
 		}
-		x := ot.Compose(srv, fsrv)
-		y := ot.Compose(cln, fcln)
+		x, err := ot.Compose(srv, fsrv)
+		if err != nil {
+			t.Errorf("Compose(%s, %s): err: %s", srv, fsrv, err.Error())
+		}
+		y, err := ot.Compose(cln, fcln)
+		if err != nil {
+			t.Errorf("T(%s, %s) err: %s", cln, fcln, err.Error())
+		}
 		if !reflect.DeepEqual(x, y) {
 			t.Errorf("fail: T(%s, %s) did not commute; got cln'.srv = %s != %s = srv'.cln", l2, l3, y, x)
 		} else {
@@ -233,8 +247,14 @@ func TestStaticCommute(t *testing.T) {
 		}
 	}
 
-	ba := ot.Compose(a, b)
-	gf := ot.Compose(f, g)
+	ba, err := ot.Compose(a, b)
+	if err != nil {
+		t.Errorf("Compose(%s, %s): err: %s", a, b, err.Error())
+	}
+	gf, err := ot.Compose(f, g)
+	if err != nil {
+		t.Errorf("Compose(%s, %s): err: %s", f, g, err.Error())
+	}
 	_ = ba
 	_ = gf
 

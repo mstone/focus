@@ -520,6 +520,16 @@ func (d *Doc) GetRandomOps(numChars int) Ops {
 	return ops.Clone()
 }
 
+// C concatenates multiple Ops slices
+func C(os ...Ops) Ops {
+	ret := Ops{}
+	for _, o := range os {
+		ret = append(ret, o...)
+	}
+	return ret
+}
+
+// Is converts s into a slice of rune leaf insertion ops
 func Is(s string) Ops {
 	if len(s) == 0 {
 		return nil
@@ -531,10 +541,12 @@ func Is(s string) Ops {
 	return os
 }
 
+// Ic converts r into a single leaf insertion op
 func Ic(r rune) Op {
 	return Op{Tag: O_INSERT, Body: Leaf(r)}
 }
 
+// Ir converts rs into a slice of rune leaf insertion ops
 func Ir(rs []rune) Ops {
 	if len(rs) == 0 {
 		return nil
@@ -546,6 +558,7 @@ func Ir(rs []rune) Ops {
 	return os
 }
 
+// It creates an insertion op based on t
 func It(t Tree) Op {
 	if t.Len() == 0 {
 		return Z()
@@ -553,6 +566,7 @@ func It(t Tree) Op {
 	return Op{Tag: O_INSERT, Body: t}
 }
 
+// R creates a retain op
 func R(n int) Op {
 	if n == 0 {
 		return Z()
@@ -560,10 +574,12 @@ func R(n int) Op {
 	return Op{Tag: O_RETAIN, Size: n}
 }
 
+// Rs creates an op slice containing a single retain op
 func Rs(n int) Ops {
 	return Ops{R(n)}
 }
 
+// D creates a delete op
 func D(n int) Op {
 	if n == 0 {
 		return Z()
@@ -574,22 +590,27 @@ func D(n int) Op {
 	return Op{Tag: O_DELETE, Size: -n}
 }
 
+// Ds creates an op slice containing a single delete op
 func Ds(n int) Ops {
 	return Ops{D(n)}
 }
 
+// W returns a With op wrapping kids
 func W(kids Ops) Op {
 	return Op{Tag: O_WITH, Kids: kids}
 }
 
+// Ws returns an op slice containing a single With op wrapping kids
 func Ws(kids Ops) Ops {
 	return Ops{W(kids)}
 }
 
+// Z returns a nil op
 func Z() Op {
 	return Op{Tag: O_NIL}
 }
 
+// Zs returns an op slice wrapping a single nil op
 func Zs() Ops {
 	return Ops{Z()}
 }
