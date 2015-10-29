@@ -99,26 +99,33 @@ func (a *Adapter) Recv(ops ot.Ops) {
 		a.suppress = false
 	}()
 
-	for _, op := range ops {
-		if op.Len() == 0 {
-			continue
-		}
+	if len(ops) != 1 || !ops[0].IsWith() {
+		alert.String("recv err; ops len != 1 || ops[0] != With(...)")
+		panic(1)
+	}
+	o := ops[0]
+
+	for _, op := range o.Kids {
 		switch {
-		case op.IsRetain():
-			alert.String(fmt.Sprintf("retain(%d)", op.Size))
-			pos += op.Size
+		case op.IsZero():
 			continue
 		case op.IsInsert():
 			rowcol := NewRowCol(a.doc, pos)
 			alert.String(fmt.Sprintf("insert(%d, %q)", pos, op.Body.String()))
-			// alert.JSON(rowcol)
-			a.doc.Insert(rowcol, ot.AsString(op.Body))
+			a.doc.Insert(rowcol, ot.AsString([]rune{op.Body.Leaf}))
 			pos += op.Len()
+			continue
+		case op.IsRetain():
+			alert.String(fmt.Sprintf("retain(%d)", op.Size))
+			pos += op.Size
 			continue
 		case op.IsDelete():
 			startEnd := NewStartEnd(a.doc, pos, pos-op.Size)
 			alert.String(fmt.Sprintf("remove(%d, %d)", pos, pos-op.Size))
 			a.doc.Remove(startEnd)
+		case op.IsWith():
+			alert.String("recv err; got inner with op; exiting")
+			panic(2)
 		}
 	}
 }
