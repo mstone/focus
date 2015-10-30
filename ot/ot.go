@@ -260,6 +260,7 @@ func compose1(as, bs Ops) (Ops, error) {
 			ta := oa.Body.Clone()
 			err = Apply(ob, &ta)
 			if err != nil {
+				err = errors.Trace(err)
 				break
 			}
 			ret = append(ret, It(ta))
@@ -267,6 +268,7 @@ func compose1(as, bs Ops) (Ops, error) {
 			kc := Ops{}
 			kc, err = Compose(oa.Kids, ob.Kids)
 			if err != nil {
+				err = errors.Trace(err)
 				break
 			}
 			ret = append(ret, W(kc))
@@ -353,6 +355,7 @@ func transform1(as, bs Ops) (Ops, Ops, error) {
 		rb.Retain(oa.Len())
 		sa, sb, err = transform1(as[a+1:], bs)
 		if err != nil {
+			err = errors.Trace(err)
 			break
 		}
 	case lb > 0 && bs.First().IsInsert():
@@ -361,6 +364,7 @@ func transform1(as, bs Ops) (Ops, Ops, error) {
 		rb.Insert(ob.Body)
 		sa, sb, err = transform1(as, bs[b+1:])
 		if err != nil {
+			err = errors.Trace(err)
 			break
 		}
 	case la > 0 && lb > 0:
@@ -369,6 +373,7 @@ func transform1(as, bs Ops) (Ops, Ops, error) {
 		minlen := min(oa.Len(), ob.Len())
 		ta, tb, err = shortenOps(*oa, *ob)
 		if err != nil {
+			err = errors.Trace(err)
 			break
 		}
 
@@ -392,6 +397,7 @@ func transform1(as, bs Ops) (Ops, Ops, error) {
 			var ka, kb Ops
 			ka, kb, err = Transform(oa.Kids, ob.Kids)
 			if err != nil {
+				err = errors.Trace(err)
 				break
 			}
 			ra.With(ka)
@@ -410,6 +416,7 @@ func transform1(as, bs Ops) (Ops, Ops, error) {
 		}
 		sa, sb, err = transform1(has, hbs)
 		if err != nil {
+			err = errors.Trace(err)
 			break
 		}
 	default:
