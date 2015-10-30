@@ -99,9 +99,12 @@ func (a *Adapter) Recv(ops ot.Ops) {
 		a.suppress = false
 	}()
 
+	if len(ops) == 0 {
+		return
+	}
 	if len(ops) != 1 || !ops[0].IsWith() {
 		alert.String("recv err; ops len != 1 || ops[0] != With(...)")
-		panic(1)
+		panic("bad ops len")
 	}
 	o := ops[0]
 
@@ -215,6 +218,7 @@ func (a *Adapter) OnChange(change *js.Object) bool {
 		ops = ot.NewDelete(oldLen, start, numRunes)
 	}
 
+	ops = ot.Ws(ops)
 	alert.String("sending ops")
 	alert.Golang(ops)
 

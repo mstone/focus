@@ -156,8 +156,9 @@ func (d *doc) transform(rev int, clientOps ot.Ops) (int, ot.Ops, error) {
 	// // produce transformed ops
 	// forServer, _ := ot.Transform(clientOps, serverOps)
 
+	clientOps2 := ot.Ops{}
 	for _, concurrentOp := range concurrentServerOps {
-		clientOps2, _, err := ot.Transform(clientOps, concurrentOp)
+		clientOps2, _, err = ot.Transform(clientOps, concurrentOp)
 		if err != nil {
 			return 0, nil, errors.Trace(err)
 		}
