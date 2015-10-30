@@ -407,10 +407,13 @@ func transform1(as, bs Ops) (Ops, Ops, error) {
 		case oa.IsWith() && ob.IsRetain():
 			rb.With(oa.Kids)
 		case oa.IsDelete() && ob.IsDelete():
+			// No action required; both sides have already D(minlen)
 		case oa.IsDelete() && ob.IsRetain():
+			fallthrough
 		case oa.IsDelete() && ob.IsWith():
 			ra.Delete(minlen)
 		case oa.IsRetain() && ob.IsDelete():
+			fallthrough
 		case oa.IsWith() && ob.IsDelete():
 			rb.Delete(minlen)
 		}
