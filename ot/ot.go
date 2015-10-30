@@ -246,7 +246,7 @@ func compose1(as, bs Ops) (Ops, error) {
 		case oa.IsRetain() && ob.IsDelete():
 			ret = append(ret, D(minlen))
 		case oa.IsRetain() && ob.IsWith():
-			// TODO
+			ret = append(ret, ob.Clone())
 		case oa.IsInsert() && ob.IsRetain():
 			oc, err = shortenOp(oa, minlen)
 			if err != nil {
@@ -257,13 +257,23 @@ func compose1(as, bs Ops) (Ops, error) {
 		case oa.IsInsert() && ob.IsDelete():
 			// insertion then deletion cancels
 		case oa.IsInsert() && ob.IsWith():
-			// TODO; requires apply()!
+			ta := oa.Body.Clone()
+			err = Apply(ob, &ta)
+			if err != nil {
+				break
+			}
+			ret = append(ret, It(ta))
 		case oa.IsWith() && ob.IsWith():
-			// TODO
+			kc := Ops{}
+			kc, err = Compose(oa.Kids, ob.Kids)
+			if err != nil {
+				break
+			}
+			ret = append(ret, W(kc))
 		case oa.IsWith() && ob.IsRetain():
-			// TODO
+			ret = append(ret, oa.Clone())
 		case oa.IsWith() && ob.IsDelete():
-			// TODO
+			ret = append(ret, D(minlen))
 		default:
 			err = errors.Errorf("compose1 error: impossible case\n\tas: %s\n\tbs: %s", as.String(), bs.String())
 		}
@@ -378,10 +388,24 @@ func transform1(as, bs Ops) (Ops, Ops, error) {
 		case oa.IsRetain() && ob.IsRetain():
 			ra.Retain(minlen)
 			rb.Retain(minlen)
+		case oa.IsWith() && ob.IsWith():
+			var ka, kb Ops
+			ka, kb, err = Transform(oa.Kids, ob.Kids)
+			if err != nil {
+				break
+			}
+			ra.With(ka)
+			rb.With(kb)
+		case oa.IsRetain() && ob.IsWith():
+			ra.With(ob.Kids)
+		case oa.IsWith() && ob.IsRetain():
+			rb.With(oa.Kids)
 		case oa.IsDelete() && ob.IsDelete():
 		case oa.IsDelete() && ob.IsRetain():
+		case oa.IsDelete() && ob.IsWith():
 			ra.Delete(minlen)
 		case oa.IsRetain() && ob.IsDelete():
+		case oa.IsWith() && ob.IsDelete():
 			rb.Delete(minlen)
 		}
 		sa, sb, err = transform1(has, hbs)
