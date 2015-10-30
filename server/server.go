@@ -5,14 +5,18 @@
 package server
 
 import (
-	"github.com/arschles/go-bindata-html-template"
+	"fmt"
 	"net/http"
+	"os"
+	"runtime"
 	"time"
 
 	log "gopkg.in/inconshreveable/log15.v2"
 
+	"github.com/arschles/go-bindata-html-template"
 	"github.com/codegangsta/negroni"
 	"github.com/gorilla/websocket"
+
 	"github.com/mstone/focus/internal/server"
 	"github.com/mstone/focus/store"
 )
@@ -84,7 +88,11 @@ func (s *Server) configure() error {
 		defer func() {
 			r := recover()
 			if r != nil {
-				log.Error("http caught panic", "panic", r)
+				w.WriteHeader(http.StatusInternalServerError)
+				stack := make([]byte, 10000)
+				stack = stack[:runtime.Stack(stack, false)]
+				fmt.Fprintf(os.Stderr, "%s", string(stack))
+				log.Error("http caught panic", "panic", r, "stack", string(stack))
 			}
 		}()
 		next(w, r)

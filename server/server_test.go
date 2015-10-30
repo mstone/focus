@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"path"
 	"testing"
 	"time"
 
@@ -45,6 +46,9 @@ func newTestServer(t *testing.T) (*httptest.Server, *Server) {
 		Store:  focusStore,
 		API:    "",
 		Assets: http.Dir(pkg.Dir),
+		Templates: func(assetPath string) ([]byte, error) {
+			return ioutil.ReadFile(path.Join(pkg.Dir, "templates", assetPath))
+		},
 	}
 	log.Info("test found assets path", "assets", focusConf.Assets)
 

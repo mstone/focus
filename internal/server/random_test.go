@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/jmoiron/sqlx"
+	_ "github.com/mattn/go-sqlite3"
 	log "gopkg.in/inconshreveable/log15.v2"
 
 	"github.com/mstone/focus/internal/connection"
@@ -78,7 +79,6 @@ func (w *ws) ReadJSON(v interface{}) error {
 		js, _ := json.Marshal(v2)
 		return json.Unmarshal(js, v)
 	}
-	return nil
 }
 
 func (w *ws) WriteJSON(v interface{}) error {
@@ -91,7 +91,6 @@ func (w *ws) WriteJSON(v interface{}) error {
 	case w.wq <- v:
 		return nil
 	}
-	return nil
 }
 
 func (w *ws) SetReadTimeout(d time.Duration) error {
@@ -302,7 +301,7 @@ func testOnce(t *testing.T) {
 
 	d := focusSrv.names["/"]
 	sdrc := make(chan im.Readallresp)
-	d <- im.Readall{sdrc}
+	d <- im.Readall{Reply: sdrc}
 	sdr := <-sdrc
 	sd := sdr.Body
 
