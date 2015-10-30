@@ -222,10 +222,10 @@ func doShortenOpTable(t *testing.T, cases []ShortenOpCase) {
 		c, e := shortenOp(x.A, x.N)
 		t.Logf("shortenOp %d, got %+v, %+v", idx, c, e)
 		if !reflect.DeepEqual(c, x.C) {
-			t.Fatalf("shortenOp %d failed; [%s %s] -> [%s %s], %s != expected C [%s]", idx, x.A, x.N, x.C, x.E, c)
+			t.Fatalf("shortenOp %d failed; [%s %d] -> [%s], %s != expected C [%s]", idx, x.A.String(), x.N, x.C.String(), x.E.Error(), c.String())
 		}
 		if !reflect.DeepEqual(e, x.E) {
-			t.Fatalf("shortenOp %d failed; [%s %s] -> [%s %s], %s != expected E [%s]", idx, x.A, x.N, x.C, x.E, e)
+			t.Fatalf("shortenOp %d failed; [%s %d] -> [%s], %s != expected E [%s]", idx, x.A.String(), x.N, x.C.String(), x.E.Error(), e.Error())
 		}
 	}
 }
@@ -256,13 +256,13 @@ func doShortenOpsTable(t *testing.T, cases []ShortenOpsCase) {
 		t.Logf("shorten %d, shortening A: %s, B: %s, -> C: %s, D: %s, E: %s", idx, x.A.String(), x.B.String(), x.C.String(), x.D.String(), x.E)
 		c, d, e := shortenOps(x.A, x.B)
 		if !reflect.DeepEqual(c, x.C) {
-			t.Fatalf("shorten %d failed; [%s %s] -> [%s %s], %s != expected C [%s]", idx, x.A, x.B, x.C, x.D, x.E, c)
+			t.Fatalf("shorten %d failed; [%s %s] -> [%s %s], %s != expected C [%s]", idx, x.A.String(), x.B.String(), x.C.String(), x.D.String(), x.E.Error(), c.String())
 		}
 		if !reflect.DeepEqual(d, x.D) {
-			t.Fatalf("shorten %d failed; [%s %s] -> [%s %s], %s != expected D [%s]", idx, x.A, x.B, x.C, x.D, x.E, d)
+			t.Fatalf("shorten %d failed; [%s %s] -> [%s %s], %s != expected D [%s]", idx, x.A.String(), x.B.String(), x.C.String(), x.D.String(), x.E.Error(), d.String())
 		}
 		if !reflect.DeepEqual(e, x.E) {
-			t.Fatalf("shorten %d failed; [%s %s] -> [%s %s], %s != expected E [%s]", idx, x.A, x.B, x.C, x.D, x.E, e)
+			t.Fatalf("shorten %d failed; [%s %s] -> [%s %s], %s != expected E [%s]", idx, x.A.String(), x.B.String(), x.C.String(), x.D.String(), x.E.Error(), e.Error())
 		}
 	}
 }
