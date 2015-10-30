@@ -160,7 +160,7 @@ func (c *client) Send(rev int, hash string, ops ot.Ops) {
 		Hash: hash,
 		Ops:  ops.Clone(),
 	}
-	// c.l.Info("send", "num", c.numSend, "rev", c.rev, "ops", ops)
+	// c.l.Info("send", "num", c.numSend, "rev", rev, "ops", ops)
 	err := c.ws.WriteJSON(m)
 	c.ws.CancelWriteTimeout()
 	if err != nil {
@@ -217,7 +217,7 @@ Loop:
 	}
 }
 
-func testOnce(t *testing.T) {
+func testOnce(t *testing.T, iteration int) {
 	var err error
 	log.Crit("boot")
 
@@ -305,11 +305,11 @@ func testOnce(t *testing.T) {
 	sdr := <-sdrc
 	sd := sdr.Body
 
-	// log.Info("stat", "obj", "doc", "body", sd)
+	log.Info("stat", "obj", "doc", "body", sd)
 
 	for i := 0; i < numClients; i++ {
 		st := clients[i].st
-		// log.Info("stat", "obj", "cln", "client", i, "body", clients[i].doc.String(), "clnst", st)
+		log.Info("stat", "obj", "cln", "client", i, "body", clients[i].doc.String(), "clnst", st)
 		if !st.IsSynchronized() {
 			t.Fatalf("unsynchronized client[%d]; state: %q", i, st)
 		}
@@ -327,6 +327,8 @@ func testOnce(t *testing.T) {
 			}
 		}
 	}
+	t.Logf("iteration %d complete", iteration)
+	log.Info("iteration complete", "iteration", iteration)
 }
 
 func TestRandom(t *testing.T) {
@@ -334,6 +336,6 @@ func TestRandom(t *testing.T) {
 	flag.IntVar(&iterations, "iterations", 10, "number of iterations to run tests")
 
 	for i := 0; i < iterations; i++ {
-		testOnce(t)
+		testOnce(t, i)
 	}
 }
