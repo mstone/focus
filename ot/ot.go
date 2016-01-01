@@ -87,7 +87,6 @@ func Apply(o Op, t *Tree) error {
 
 	tz := NewZipper(t, 0, 10)
 
-	// olen := len(o.Kids)
 	for _, o := range o.Kids {
 		switch {
 		case o.IsZero():
@@ -100,10 +99,27 @@ func Apply(o Op, t *Tree) error {
 		case o.IsDelete():
 			tz.Delete(o.Len())
 		case o.IsWith():
-			err := Apply(o, tz.Current())
+			// BUG(mistone): on a newly created zipper to a Branch(nil), tz.Current is nil
+			// because our zipper is an insertion-point, at index 0, to the left of cell
+			// #0 in t.Kids (bug?).
+			//
+			// However, as we advance down into t, we will create new zippers each time
+			// we descend (bug?). Therefore, for the purposes of applying a top-level With-op, we
+			// want to recurse on tz.Parent()
+			//
+			// However, assuming we're already in the middle of processing, current will correctly
+			// point to the branch to be modified.
+			//
+			// (Argh!)
+			c := tz.Current()
+			// if c == nil {
+			// 	c = tz.Parent()
+			// }
+			err := Apply(o, c)
 			if err != nil {
 				return errors.Trace(err)
 			}
+			tz.Skip(1)
 		}
 	}
 	return nil
@@ -506,16 +522,19 @@ func (d *Doc) String() string {
 	return d.body.String()
 }
 
-func (d *Doc) Apply(os Ops) {
+func (d *Doc) Apply(os Ops) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
 	body := d.body.Clone()
+	// alert.String(fmt.Sprintf("Apply: ops: %s, body: %+v", os.String(), body))
+
 	err := Apply(W(os), &body)
 	if err != nil {
-		panic(err)
+		return errors.Trace(err)
 	}
 	d.body = body
+	return nil
 }
 
 func RandIntn(n int) int {
@@ -757,7 +776,10 @@ func (c *Controller) OnServerAck(rev int, ops Ops) {
 }
 
 func (c *Controller) OnServerWrite(rev int, ops Ops) {
-	c.serverDoc.Apply(ops)
+	err := c.serverDoc.Apply(ops)
+	if err != nil {
+		panic(err)
+	}
 	switch c.state {
 	case CS_SYNCED:
 		c.serverRev = rev

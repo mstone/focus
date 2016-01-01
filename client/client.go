@@ -81,6 +81,8 @@ func makeDocument(sessionObj *js.Object, docObj **js.Object) (built bool, err er
 }
 
 func main() {
+	// js.Debugger()
+
 	var built bool
 	var err error
 	var aceDiv *js.Object

@@ -10,15 +10,27 @@ import (
 )
 
 func Golang(s interface{}) {
-	js.Global.Get("console").Call("log", fmt.Sprintf("%+v", s))
+	if js.Global == nil {
+		fmt.Printf("%+v\n", s)
+	} else {
+		js.Global.Get("console").Call("log", fmt.Sprintf("%+v", s))
+	}
 }
 
 func String(s string) {
-	js.Global.Get("console").Call("log", s)
+	if js.Global == nil {
+		fmt.Printf("%s\n", s)
+	} else {
+		js.Global.Get("console").Call("log", s)
+	}
 }
 
 func JSON(o *js.Object) {
-	s := o.String()
-	// js.Global.Get("JSON").Call("stringify", o).String()
-	js.Global.Get("console").Call("log", s)
+	if js.Global == nil {
+		fmt.Printf("%s\n", o.String())
+	} else {
+		s := o.String()
+		// js.Global.Get("JSON").Call("stringify", o).String()
+		js.Global.Get("console").Call("log", s)
+	}
 }

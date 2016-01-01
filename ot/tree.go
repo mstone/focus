@@ -42,8 +42,10 @@ func (ts Trees) Clone() Trees {
 	return ret
 }
 
-func (t Tree) String() string {
+func (t *Tree) String() string {
 	switch {
+	case t == nil:
+		return "nil"
 	case t.Tag == T_LEAF:
 		return AsString([]rune{t.Leaf})
 	case t.Tag == T_BRANCH:
@@ -209,8 +211,9 @@ func (z *Zipper) Current() *Tree {
 	p, n := z.Parent(), z.Index()
 	if 0 <= n && n < len(p.Kids) {
 		return &z.Parent().Kids[z.Index()]
+	} else {
+		return z.Parent()
 	}
-	return nil
 }
 
 func (z *Zipper) Parent() *Tree {

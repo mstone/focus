@@ -21,8 +21,9 @@ import (
 	"github.com/mstone/focus/store"
 )
 
-//go:generate gopherjs build github.com/mstone/focus/client -m -o public/client.js
-//go:generate esc -o assets.go -pkg=main -prefix=public/ public/client.js public/ace-builds/src-min-noconflict/
+//go:generate gopherjs build github.com/mstone/focus/client -o public/client.js
+//go:generate sed -i -e s,\"/,\"http://localhost:8080/,g public/client.js.map
+//go:generate esc -o assets.go -pkg=main -prefix=public/ public/client.js public/client.js.map public/ace-builds/src-min-noconflict/
 //go:generate go-bindata -o bindata.go -prefix=templates/ templates/
 
 func main() {

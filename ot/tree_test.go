@@ -17,7 +17,7 @@ func TestZipperInsert(t *testing.T) {
 		t.Fatalf("index != 0")
 	}
 
-	if z.Current() != nil {
+	if z.Current() != &root {
 		t.Fatalf("current != nil")
 	}
 
@@ -54,7 +54,7 @@ func TestZipperInsert(t *testing.T) {
 
 	z.Delete(1)
 
-	// back to square emtpy root
+	// back to square empty root
 	if z.Parent() != &root {
 		t.Fatalf("parent != root")
 	}
@@ -63,7 +63,7 @@ func TestZipperInsert(t *testing.T) {
 		t.Fatalf("index != 0")
 	}
 
-	if z.Current() != nil {
+	if z.Current() != &root {
 		t.Fatalf("current != nil")
 	}
 

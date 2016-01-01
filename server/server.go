@@ -83,6 +83,7 @@ func (s *Server) configure() error {
 	m.Use(negroni.HandlerFunc(func(w http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
 		log.Info("http request", "req", r)
 		next(w, r)
+		log.Info("http response", "resp", w)
 	}))
 	m.Use(negroni.HandlerFunc(func(w http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
 		defer func() {

@@ -1,0 +1,37 @@
+= focus(1) Testing
+Michael Stone <mistone@akamai.com>
+v0.1, 2015-11-01
+:toc:
+:homepage: http://github.com/mstone/focus
+:numbered:
+:sectlinks:
+:icons: font
+
+ifdef::env-github[:outfilesuffix: .adoc]
+
+
+== Problem
+
+focus needs automated client-side tests, particularly to check the integration between ACE, web-sockets, the connection controller, and the VPP server.
+
+Secondarily, we should also think about testing browser compatibility.
+
+== Situation
+
+
+
+
+== Options
+
+Sauce Labs 'Open Sauce'.
+
+Selenium WebDriver + Selenium Server
+
+casperjs
+
+zombie.js
+
+jsdom
+
+
+
