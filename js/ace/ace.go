@@ -160,7 +160,7 @@ func (a *Adapter) AttachSocket(state *ot.Controller, conn Sender) {
 
 func (a *Adapter) OnChange(change *js.Object) bool {
 	if a.IsSuppressed() {
-		alert.String("change SUPPRESSED")
+		// alert.String("change SUPPRESSED")
 		return true
 	}
 
