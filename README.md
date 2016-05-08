@@ -23,9 +23,14 @@ management.
 After installing nix, focus can be checked out by running:
 
 ```bash
-git clone --recursive https://github.com/mstone/focus
-cd focus
+export GOPATH=$(pwd)/go
+PKG=github.com/mstone/focus
+mkdir -p $GOPATH/src/$(dirname $PKG)
+(cd $GOPATH/src/$(dirname $PKG); git clone --recursive https://$PKG)
+cd $GOPATH/src/$PKG
 ```
+
+to create a fresh GOPATH workspace containing a suitable source checkout.
 
 ## Use
 
@@ -49,6 +54,7 @@ Then edit and run commands like:
 go generate
 go build -i
 go build
+goconvey
 ```
 
 to build from your (potentially dirty) working tree.
@@ -63,4 +69,4 @@ docker load < result
 docker run -v $(pwd)/data:/data -p 127.0.0.1:3000:3000 focus /bin/focus -api=ws://localhost:3000/ws -bind=0.0.0.0:3000 -log=/data/focus.log -dsn=/data/focus.db
 ```
 
-(and customize as needed with your particular deployment settings.)
+and customize as needed with your particular deployment settings!
