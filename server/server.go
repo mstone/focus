@@ -131,7 +131,7 @@ func (s *Server) configure() error {
 			API:  s.api,
 			Name: r.URL.Path,
 		}
-		w.Header().Set("Content-Type", "text/html")
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(200)
 		tmpl.Execute(w, v)
 	})
