@@ -125,7 +125,7 @@ let
 	};
 
 	focus = ((import ./default.nix) {
-		inherit (pkgs) stdenv makeWrapper runCommand git;
+		inherit (pkgs) stdenv lib makeWrapper runCommand git;
 		inherit goPackages;
 	});
 in

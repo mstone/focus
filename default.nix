@@ -1,4 +1,10 @@
-{stdenv, goPackages, git, runCommand, makeWrapper}:
+{stdenv, lib, goPackages, git, runCommand, makeWrapper}:
+let
+	removeReferences = [ goPackages.go ];
+	removeExpr = refs: lib.flip lib.concatMapStrings refs (ref: ''
+		| sed "s,${ref},$(echo "${ref}" | sed "s,$NIX_STORE/[^-]*,$NIX_STORE/eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee,"),g" \
+	'');
+in
 goPackages.buildGoPackage rec {
 	name = "focus";
 
@@ -10,6 +16,7 @@ goPackages.buildGoPackage rec {
 		localRev = builtins.readFile ./.git/refs/heads/master;
 	} ''
 		mkdir -p $out && git -C ${toString ./.} archive --format=tar $localRev | tar xf - -C $out
+		git -C ${toString ./.} submodule foreach 'git -C ${toString ./.}/$path archive HEAD | tar xf - -C $out/$path'
 		cp -r ${toString ./.}/.git $out/.git
 	'';
 
@@ -33,6 +40,16 @@ goPackages.buildGoPackage rec {
 
 	postConfigure = ''
 		(cd go/src/${goPackagePath}; go generate)
+	'';
+
+	excludedPackages = "kitchen-sink";
+
+	preFixup = ''
+		while read file; do
+			cat $file ${removeExpr removeReferences} > $file.tmp
+			mv $file.tmp $file
+			chmod +x $file
+		done < <(find $out -type f 2>/dev/null)
 	'';
 
 	postInstall = ''
