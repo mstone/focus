@@ -1,4 +1,4 @@
-{stdenv, lib, goPackages, git, runCommand, makeWrapper}:
+{stdenv, lib, goPackages, git, runCommand}:
 let
 	removeReferences = [ goPackages.go ];
 	removeExpr = refs: lib.flip lib.concatMapStrings refs (ref: ''
@@ -21,7 +21,6 @@ goPackages.buildGoPackage rec {
 	'';
 
 	buildInputs = [
-		makeWrapper
 	] ++ (with goPackages; [
 		log15
 		negroni
@@ -50,14 +49,6 @@ goPackages.buildGoPackage rec {
 			mv $file.tmp $file
 			chmod +x $file
 		done < <(find $out -type f 2>/dev/null)
-	'';
-
-	postInstall = ''
-		for f in $(find $bin/bin -type f); do
-			wrapProgram $f \
-				--prefix PATH : ${git}/bin \
-				--set FOCUS_SRC ${src};
-		done;
 	'';
 
 	shellHook = ''

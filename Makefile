@@ -10,5 +10,8 @@ all:
 dev:
 	nix-shell -j4 -I nixpkgs=file://$(NIXPKGS_STOREPATH)
 
-.PHONY: all dev
+docker:
+	nix-build -j4 -I nixpkgs=file://$(NIXPKGS_STOREPATH) docker.nix
+
+.PHONY: all dev docker
 .DEFAULT_GOAL := all

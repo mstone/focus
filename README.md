@@ -12,43 +12,48 @@ low-latency collaborative editor inspired by and derived from
 Warning: focus is not yet feature-complete and has [known
 issues](https://github.com/mstone/focus/issues) that make it pre-alpha quality.
 
+## Dependency Management
+
+focus depends on [nix](https://nixos.org/nix/) and
+[nixpkgs](https://github.com/NixOS/nixpkgs) for fine-grain dependency
+management.
+
 ## Use
 
-For the brave, here are some hints to help get you started running a local dev instance of focus:
+After installing nix, focus can be built by running:
 
 ```bash
-export GOPATH=$HOME/go
-export PATH=$GOPATH/bin:$PATH
-mkdir -p $GOPATH/{pkg,src,bin}
+git clone --recursive https://github.com/mstone/focus
+cd focus
+make
+```
 
-go get -u github.com/tools/godep
-go get -u github.com/jteeuwen/go-bindata/...
-go get -u github.com/mjibson/esc
+## Development
 
-go get -d github.com/mstone/focus
-cd $GOPATH/src/github.com/mstone/focus
+After installing nix, focus can be developed by running:
 
-git submodule init
-git submodule update
-(cd public/gopherjs; godep go install)
+```bash
+git clone --recursive https://github.com/mstone/focus
+cd focus
+make dev
+```
 
-godep restore
+to enter a development shell, and then by running
+
+```bash
 go generate
 go build -i
 go build
 ```
 
-Then, when you're ready to think about deployment, use:
+and so on.
+
+## Docker
+
+Finally, to use Docker to pack the resulting executable together with any resources necessary for deployment, run
 
 ```
-make
-```
-
-to produce a statically linked executable.
-
-Finally, to use Docker to pack the resulting executable together with any resources necessary for deployment, try adapting something like the following to suit your network configuration:
-
-```
-docker build .
-docker run -v $(pwd)/focus.log:/focus.log -p 127.0.0.1:3000:3000 $IMG "-api=ws://my.site:3000/" "-bind=0.0.0.0:3000"
+make docker
+docker load < result
+docker run -v $(pwd)/data:/data -p 127.0.0.1:3000:3000 focus /bin/focus -api=ws://localhost:3000/ws -bind=0.0.0.0:3000 -log=/data/focus.log -dsn=/data/focus.db
 ```
