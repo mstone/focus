@@ -1,0 +1,23 @@
+diff --git a/build/build.go b/build/build.go
+index 3386d47..61a68be 100644
+--- a/build/build.go
++++ b/build/build.go
+@@ -545,15 +545,9 @@ func (s *Session) BuildPackage(pkg *PackageData) (*compiler.Archive, error) {
+ 		return archive, nil
+ 	}
+ 
+-	if err := s.writeLibraryPackage(archive, pkg.PkgObj); err != nil {
+-		if strings.HasPrefix(pkg.PkgObj, s.options.GOROOT) {
+-			// fall back to first GOPATH workspace
+-			firstGopathWorkspace := filepath.SplitList(s.options.GOPATH)[0]
+-			if err := s.writeLibraryPackage(archive, filepath.Join(firstGopathWorkspace, pkg.PkgObj[len(s.options.GOROOT):])); err != nil {
+-				return nil, err
+-			}
+-			return archive, nil
+-		}
++	// fall back to first GOPATH workspace
++	firstGopathWorkspace := filepath.SplitList(s.options.GOPATH)[0]
++	if err := s.writeLibraryPackage(archive, filepath.Join(firstGopathWorkspace, pkg.PkgObj[len(s.options.GOROOT):])); err != nil {
+ 		return nil, err
+ 	}
+ 
