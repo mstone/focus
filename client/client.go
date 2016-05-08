@@ -92,6 +92,7 @@ func main() {
 	var doc *js.Object
 	var editor *js.Object
 	var session *js.Object
+	var infinityObj *js.Object
 
 	// find editor element
 	// find ace obj
@@ -126,8 +127,18 @@ func main() {
 	built, err = makeGetGlobal("ace", &aceObj)
 	panicBuiltErr("get ACE obj")
 
+	built, err = makeGetGlobal("Infinity", &infinityObj)
+	panicBuiltErr("get Infinity")
+
 	built, err = makeEditorWiredCheckpoint(aceObj, "editor", &editor)
 	panicBuiltErr("wire #editor")
+
+	// As of ace-builds 03.03.15:
+	// Setting editor.$blockScrolling = Infinity disables the warning:
+	// "Automatically scrolling cursor into view after selection change
+	//  this will be disabled in the next version
+	//  set editor.$blockScrolling = Infinity to disable this message"
+	editor.Set("$blockScrolling", infinityObj) // XXX: buildify?
 
 	editor.Call("setTheme", "ace/theme/chrome") // XXX: buildify?
 
