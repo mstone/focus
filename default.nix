@@ -35,6 +35,7 @@ goPackages.buildGoPackage rec {
 		gopherjs.bin
 		go-bindata.bin
 		esc.bin
+		goconvey.bin
 	]);
 
 	postConfigure = ''
@@ -52,11 +53,10 @@ goPackages.buildGoPackage rec {
 	'';
 
 	shellHook = ''
-		mkdir -p gopath/{src,pkg,bin};
-		mkdir -p $(dirname gopath/src/${goPackagePath});
-		if [ ! -L gopath/src/${goPackagePath} ]; then
-			ln -sf $(pwd) gopath/src/${goPackagePath};
+		if [ -z "${builtins.getEnv "GOPATH"}" ]; then
+			echo "WARNING: the focus dev-shell requires that the focus source code working copy be placed or mounted in a standard GOPATH workspace, not accessed via symlink"
+			echo "ERROR: GOPATH not set; exiting"
+			exit 1
 		fi
-		export GOPATH=$(pwd)/gopath:$GOPATH;
 	'';
 }

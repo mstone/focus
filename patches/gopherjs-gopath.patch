@@ -1,8 +1,17 @@
 diff --git a/build/build.go b/build/build.go
-index 3386d47..61a68be 100644
+index 3386d47..5fcf9d0 100644
 --- a/build/build.go
 +++ b/build/build.go
-@@ -545,15 +545,9 @@ func (s *Session) BuildPackage(pkg *PackageData) (*compiler.Archive, error) {
+@@ -536,7 +536,7 @@ func (s *Session) BuildPackage(pkg *PackageData) (*compiler.Archive, error) {
+ 	}
+ 
+ 	if s.options.Verbose {
+-		fmt.Println(pkg.ImportPath)
++		fmt.Printf("%s -> %s, GOROOT: %s\n", pkg.ImportPath, pkg.PkgObj, s.options.GOROOT)
+ 	}
+ 
+ 	s.Archives[pkg.ImportPath] = archive
+@@ -545,15 +545,13 @@ func (s *Session) BuildPackage(pkg *PackageData) (*compiler.Archive, error) {
  		return archive, nil
  	}
  
@@ -17,7 +26,11 @@ index 3386d47..61a68be 100644
 -		}
 +	// fall back to first GOPATH workspace
 +	firstGopathWorkspace := filepath.SplitList(s.options.GOPATH)[0]
-+	if err := s.writeLibraryPackage(archive, filepath.Join(firstGopathWorkspace, pkg.PkgObj[len(s.options.GOROOT):])); err != nil {
++	pkgObj := strings.SplitAfterN(pkg.PkgObj, "/pkg/", 2)[1]
++	if s.options.Verbose {
++		fmt.Printf("%s -> %s\n", pkg.ImportPath, pkgObj)
++	}
++	if err := s.writeLibraryPackage(archive, filepath.Join(firstGopathWorkspace, pkgObj)); err != nil {
  		return nil, err
  	}
  

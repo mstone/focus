@@ -66,6 +66,35 @@ let
 				]);
 				patches = [./patches/gopherjs-gopath.patch];
 			};
+			assertions = buildGoPackage rec {
+				version = "1.6.0";
+				name = "assertions-${version}";
+				goPackagePath = "github.com/smartystreets/assertions";
+				src = pkgs.fetchurl {
+					name = "${name}.tar.gz";
+					url = "https://github.com/smartystreets/assertions/archive/${version}.tar.gz";
+					sha256 = "1z2zlxp2rsg9rhz3jrdmi2my5cv0ax2xiphnmrmw1828m0p16mlm";
+				};
+				buildInputs = [] ++ (with pkgs.go16Packages; [ net oglematchers ]);
+				excludedPackages = "testdata";
+			};
+			goconvey = buildGoPackage rec {
+				version = "1.6.2";
+				name = "goconvey-${version}";
+				goPackagePath = "github.com/smartystreets/goconvey";
+				src = pkgs.fetchurl {
+					name = "${name}.tar.gz";
+					url = "https://github.com/smartystreets/goconvey/archive/${version}.tar.gz";
+					sha256 = "1f22i9xbk9zfk4r2ap8sq3pgm0i4wmgiv9is5npcj92vq73zghii";
+				};
+				buildInputs = [assertions] ++ (with pkgs.go16Packages; [ gls oglematchers ]);
+				propagatedBuildInputs = [pkgs.go16Packages.go];
+				allowGoReference = true;
+				patches = [ ./patches/goconvey-nixify.patch ];
+				postPatch = ''
+					sed -i -e "s,filepath.Dir(file),\"$out/share/go/src/$goPackagePath/\"," goconvey.go
+				'';
+			};
 			astrewrite = buildFromGitHub {
 				rev = "fad75ab64ef927530cab4b4dfbadaddc5f6b14e2";
 				owner = "neelance";

@@ -1,0 +1,44 @@
+diff --git a/goconvey.go b/goconvey.go
+index 2c433c4..9c75aee 100644
+--- a/goconvey.go
++++ b/goconvey.go
+@@ -48,16 +48,16 @@ func flags() {
+ 
+ 	log.SetOutput(os.Stdout)
+ 	log.SetFlags(log.LstdFlags | log.Lshortfile)
++	flag.Parse()
+ }
+ func folders() {
+-	_, file, _, _ := runtime.Caller(0)
+ 	here := filepath.Dir(file)
+ 	static = filepath.Join(here, "/web/client")
+-	reports = filepath.Join(static, "reports")
++	reports = filepath.Join(getWorkDir(), "goconvey-reports")
++	log.Printf("reports: %s", reports)
+ }
+ 
+ func main() {
+-	flag.Parse()
+ 	log.Printf(initialConfiguration, host, port, nap, cover)
+ 
+ 	working := getWorkDir()
+@@ -174,6 +174,7 @@ func serveHTTP(server contract.Server, listener net.Listener) {
+ }
+ 
+ func serveStaticResources() {
++	http.Handle("/reports/", http.StripPrefix("/reports/", http.FileServer(http.Dir(reports))))
+ 	http.Handle("/", http.FileServer(http.Dir(static)))
+ }
+ 
+diff --git a/web/server/system/shell.go b/web/server/system/shell.go
+index bff9290..0177a17 100644
+--- a/web/server/system/shell.go
++++ b/web/server/system/shell.go
+@@ -29,6 +29,7 @@ func NewShell(gobin, reportsPath string, coverage bool, defaultTimeout string) *
+ }
+ 
+ func (self *Shell) GoTest(directory, packageName string, tags, arguments []string) (output string, err error) {
++	log.Printf("GoTest(%s, %s, %s, ...\n", directory, packageName, self.reportsPath)
+ 	reportFilename := strings.Replace(packageName, "/", "-", -1)
+ 	reportPath := filepath.Join(self.reportsPath, reportFilename)
+ 	reportData := reportPath + ".txt"
