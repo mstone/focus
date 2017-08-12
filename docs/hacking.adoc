@@ -1,6 +1,6 @@
 = focus(1) Hacking
 Michael Stone <mistone@akamai.com>
-v0.1, 2015-10-24
+v0.1, 2017-08-12
 :toc:
 :homepage: http://github.com/mstone/focus
 :numbered:
@@ -11,7 +11,8 @@ ifdef::env-github[:outfilesuffix: .adoc]
 
 == HACKING
 
-Dependencies are controlled via shell.nix[../shell.nix] per https://garbas.si/2016/updating-your-nix-sources.html
+Dependencies are pinned via link:../shell.nix[shell.nix] per https://garbas.si/2016/updating-your-nix-sources.html[Rok Garbas] and via judicious use of https://github.com/kamilchm/go2nix[go2nix] for go-based build tools like https://github.com/gopherjs/gopherjs[gopherjs], https://github.com/jteeuwen/go-bindata[go-bindata], and https://github.com/mjibson/esc[esc].
+
 
 == TOOLS
 
@@ -20,3 +21,4 @@ godebug
 goconvey
 gometalinter
 git log -L ^:funcname:file
+gopherjs serve
