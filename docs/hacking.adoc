@@ -11,6 +11,8 @@ ifdef::env-github[:outfilesuffix: .adoc]
 
 == HACKING
 
+Dependencies are controlled via shell.nix[../shell.nix] per https://garbas.si/2016/updating-your-nix-sources.html
+
 == TOOLS
 
 [verse]
