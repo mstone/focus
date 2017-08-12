@@ -23,6 +23,13 @@ buildGoPackage rec {
         (export GOPATH="`pwd`/go:$GOPATH"; cd go/src/${goPackagePath}; go generate)
     '';
 
+    postInstall = stdenv.lib.optionalString stdenv.isDarwin ''
+        # Fix rpaths to avoid derivation output cycles
+        for file in $(grep -rl $out/lib $bin); do
+            install_name_tool -delete_rpath $out/lib -add_rpath $bin $file
+        done
+    '';
+
     excludedPackages = "kitchen-sink";
 
     shellHook = ''
