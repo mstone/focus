@@ -40,9 +40,9 @@
     goPackagePath = "github.com/juju/errors";
     fetch = {
       type = "git";
-      url = "https://github.com/juju/errors";
-      rev = "c7d06af17c68cd34c835053720b21f6549d9b0ee";
-      sha256 = "1dmj8wkpmkw4z4c7wmnscs4ykrcv7p8lgwb75g5akahwqjaf9zcp";
+      url = "https://github.com/mstone/errors";
+      rev = "ed24224e267e409d360d7c49b036cb5e4c4283b0";
+      sha256 = "10n7jx0advcmd1dn0cnrhixx574vfv35ywyhhmx6a5cxgfsk13jh";
     };
   }
   {
