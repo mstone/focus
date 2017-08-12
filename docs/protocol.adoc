@@ -19,7 +19,7 @@ In each stage, the participants exchange VPP messages using the abstract syntax 
 
   * opening documents (`C_OPEN`),
   * assigning channel-bound document handles ("fds") similar to UNIX file descriptors (`C_OPEN_RESP`),
-  * communicating document edits (`C_WRITE`), and
+  * communicating document edits (`C_WRITE`) both from client-to-server and from server-to-clients, and
   * acknowledging document edits (`C_WRITE_RESP`).
 
 Next, we describe the protocol stages in more detail.
@@ -42,7 +42,7 @@ Once subscribed, VPP client subscriptions are considered to be in "steady state"
 
 In steady-state, VPP clients receive `C_WRITE` commands following external document changes and can send writes of their own (via client-initiated `C_WRITE`).
 
-Accepted writes will then be rebased, acked (to the initiating client) with a `C_WRITE_RESP` message indicating the resulting new server document revision number, and retransmitted to all other clients subscribed to the same document.
+Accepted writes will then be rebased, acked (to the initiating client) with a `C_WRITE_RESP` message indicating the resulting new server document revision number, and the rebased writes will be broadcast to all other clients subscribed to the same document.
 
 === Closure
 

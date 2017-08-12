@@ -5,7 +5,7 @@ focus is an experimental collaboration platform.
 Its first major component, `vaporpad` ([design doc](./docs/intent.adoc)), is a
 low-latency collaborative editor inspired by and derived from
 [etherpad-lite](http://etherpad.org), [sharejs](http://sharejs.org), and
-[ot.v](https://github.com/Operational- Transformation/ot.v).
+[ot.v](https://github.com/Operational-Transformation/ot.v).
 
 ## Caveats
 
