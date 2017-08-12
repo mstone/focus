@@ -15,7 +15,13 @@ env = rec {
 
   esc = (pkgs.lib.callPackageWith pkgs ./nix/esc.nix {});
 
-  bin = (pkgs.lib.callPackageWith (pkgs // {
+  focus = (pkgs.lib.callPackageWith (pkgs // {
     inherit gopherjs go-bindata esc;
-  }) ./default.nix {}).bin;
+  }) ./default.nix {});
+
+  bin = focus.bin;
+
+  docker = (pkgs.lib.callPackageWith (pkgs // {
+    inherit focus;
+  }) ./docker.nix {});
 }; in env
