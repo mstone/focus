@@ -15,7 +15,7 @@ ifdef::env-github[:outfilesuffix: .adoc]
 
 === Overview
 
-http://mstone.info[↑Michael] wants a bug-free etherpad clone, and to practice writing http://sunnyday.mit.edu/16.355/levesonintent.pdf[Intent Specifications] and http://www.amazon.com/dp/0201877120[system descriptions].
+http://mstone.info[↑Michael] wants a dependable collaboration server in the style of etherpad or Google Docs. The following design notes are written in the style of Leveson's http://sunnyday.mit.edu/16.355/levesonintent.pdf[Intent Specifications] and Jackson's http://www.amazon.com/dp/0201877120[system descriptions].
 
 === Administration
 
@@ -35,7 +35,7 @@ Whenever.
 
 ==== Status
 
-Vaporware.
+Alpha. Collaborative editing of "vaporpads" works but there is much hardening + operationalization work left to be done.
 
 
 
@@ -61,23 +61,23 @@ Vaporware.
 // Level 1 -->
 == System Purpose
 
-The purpose of the Focus/Vaporpad system is to be a trustworthy text-field/text-editor synchronization service.
+The purpose of the Focus system is to provide a trustworthy real-time collaborative editing service for a rich document model suitable for representing text, drawings, spreadsheets, and forms.
 
 [[T-1]]
 .T-1: Target Operating Environment
-Vaporpad is intended to be run either on the internet or on a private network of 2014: that is, over IPv4 or v6, TCP, TLS, HTTP/1.1 or HTTP/2 and with access to renderers for HTML5, JS, CSS3, WebSockets, etc.
+Focus is intended to be run either on the internet or on a private network of 2014: that is, over IPv4 or v6, TCP, TLS, HTTP/1.1 or HTTP/2 and with access to renderers for HTML5, JS, CSS3, WebSockets, etc.
 
 [[T-2]]
 .T-2: Target Hardware
-Vaporpad is intended to run on Debian Jessie and Mac OS 10.9 on machines with at least 1G available RAM, 1G available diskspace, and 1 available >1GHz CPU core.
+Focus is intended to run on Debian Jessie and Mac OS 10.9 on machines with at least 1G available RAM, 1G available diskspace, and 1 available >1GHz CPU core.
 
 [[T-3]]
 .T-3: Target Interfaces
-Vaporpad will speak HTTP/1.1 on machines with 1 network interface, 1 IPv4 or IPv6 address, and 1 TCP port.
+Focus will speak HTTP/1.1 on machines with 1 network interface, 1 IPv4 or IPv6 address, and 1 TCP port.
 
 [[T-4]]
 .T-4: Target Audience
-Vaporpad is intended to work for distributors, operators, integrators, editors, viewers, contributors, and researchers.
+Focus is intended to work for distributors, operators, integrators, editors, viewers, contributors, and researchers.
 
 === High-Level System Diagram
 
@@ -117,11 +117,11 @@ Focus comes to be seen as not fast, reliable, easy, or secure.
 
 [[LIM-1]]
 .LIM-1: Authorship
-In the presence of deletions, Vaporpad cannot accurately display "who said what" because "Alice typed 'o'" and "Alice typed 'k'" does not imply that Alice typed "ok".
+In the presence of deletions, Focus cannot accurately display "who said what" because "Alice typed 'o'" and "Alice typed 'k'" does not imply that Alice typed "ok".
 
 [[LIM-2]]
 .LIM-2: Scalability
-Today, it is more important that Vaporpad work reliably for tens of editors per pad and for tens of simultaneous pads out of thousands than for larger numbers of concurrent editors, pads, or silent pads.
+Today, it is more important that Focus work reliably for tens of editors per pad and for tens of simultaneous vaporpads out of thousands than for larger numbers of concurrent editors, pads, or silent pads.
 
 
 
@@ -157,23 +157,23 @@ Today, it is more important that Vaporpad work reliably for tens of editors per 
 
 [[N-D-1]]
 .N-D-1: Freedom
-As a distributor, I want Vaporpad to be https://www.debian.org/social_contract=guidelines[DFSG-free software].
+As a distributor, I want Focus to be https://www.debian.org/social_contract=guidelines[DFSG-free software].
 
 [[N-D-2]]
 .N-D-2: Maintainability
-As a distributor, I want Vaporpad to be easy to package. ↑<<A-5>>
+As a distributor, I want Focus to be easy to package. ↑<<A-5>>
 
 [[N-D-3]]
 .N-D-3: Upstream Support
-As a distributor, I want Vaporpad to be maintained. ↑<<A-5>>
+As a distributor, I want Focus to be maintained. ↑<<A-5>>
 
 [[N-D-4]]
 .N-D-4: Upstream Availability
-As a distributor, I want to know how to reach the Vaporpad maintainers.
+As a distributor, I want to know how to reach the Focus maintainers.
 
 [[N-D-5]]
 .N-D-5: Release Notification
-As a distributor, I want to know how to subscribe to news about new Vaporpad releases.
+As a distributor, I want to know how to subscribe to news about new Focus releases.
 
 === Operators
 
@@ -347,23 +347,23 @@ As a contributor, I don't want to have to sign anything to contribute.
 
 [[PR-1]]
 .PR-1: Client-Server Architecture
-Vaporpad will use a client-server architecture. ↑[<<N-O-11>>, <<N-I-2>>]
+Focus will use a client-server architecture. ↑[<<N-O-11>>, <<N-I-2>>]
 
 [[PR-2]]
 .PR-2: Reference Code + Protocol
-Vaporpad includes reference client code, reference server code, and a documented protocol spoken between them. ↑[<<N-I-2>>]
+Focus includes reference client code, reference server code, and a ↓<<protocol#protocol-overview,documented protocol>> spoken between them. ↑[<<N-I-2>>]
 
 [[PR-3]]
 .PR-3: Operational Transformation Theory
-Vaporpad shall be based on the theory of operational transformation.
+Focus shall be based on the ↓<<ot-theory#introduction,theory of operational transformation>>.
 
 [[PR-4]]
 .PR-4: Memory-Safe Language
-Vaporpad shall be written in a memory-safe language. ↑[<<N-O-11>>, <<N-I-2>>]
+Focus shall be written in a memory-safe language. ↑[<<N-O-11>>, <<N-I-2>>]
 
 [[PR-5]]
 .PR-5: Certified Algorithms
-Where easy, core Vaporpad algorithms (or their cousins) shall be certified correct w.r.t. this specification. ↑<<N-I-2>>
+Where easy, core Focus algorithms (or their cousins) shall be certified correct w.r.t. this specification. ↑<<N-I-2>>
 
 [[PR-6]]
 .PR-6: Protocol Purpose
